@@ -1,0 +1,245 @@
+================================================================================
+PLANT DOCTOR PRODUCT GUIDE — RECOMMENDATION ENGINE LOGIC & WEIGHTING
+================================================================================
+This document describes how the pd_engine (Python) scores products, applies
+constraints, builds stacks, and surfaces bundles and CHAMPION turf pairs. It
+reflects the codebase under pd_engine/ and the catalog CSV.
+
+--------------------------------------------------------------------------------
+1. HIGH-LEVEL PIPELINE
+--------------------------------------------------------------------------------
+1. Load products from plant_doctor_recommendation_engine_template.csv (Catalog).
+2. Build UserInput from raw JSON (intent.py): recommendation_mode, goals vs
+   problems, problems/soils, goal_vertical, goal_weights, confidence, etc.
+3. Score every product (scoring.score_product) → ScoredProduct with breakdown.
+4. Sort by score descending (sort_scored).
+5. Decide bundle override (bundles.bundle_override_decision).
+6. Either recommend a bundle as primary (override path) OR build an individual
+   plan (stacking.build_stack or build_stack_goals).
+7. Attach CHAMPION Fairway/Greens pair when warranted (champion_turf).
+8. Goals mode: set primary_fertiliser (top NUTRITION SKU) unless CHAMPION pair
+   covers the fertiliser tier.
+9. Return Recommendation: primary, stack, upgrade_path, explanations, etc.
+
+--------------------------------------------------------------------------------
+2. USER INPUT & MODES
+--------------------------------------------------------------------------------
+recommendation_mode:
+  - "problems" — symptom + soil weighting; problem_scores and soil_scores drive
+    the base score. Intent is FORCED to rescue_mode (see below).
+  - "goals" — CSV goal columns (lawn / garden / farm) drive fit via
+    effective_goal_weights; user intent applies only here (Establishment,
+    Maintenance, Performance in the UI).
+
+Intent (UserInput.intent):
+  - Problems mode: always "rescue_mode" after build_user_input — treating symptom
+    flows as “fix the problem” weighting (role_multiplier uses rescue for VISUAL).
+  - Goals mode: user-selected intent (diagnosis/rescue raw values are remapped to
+    maintenance_mode for goals). Legacy API values "budget" / "budget_mode" map
+    to maintenance_mode.
+
+Confidence (0..1): Used for bundle override triggers and how many bundle options
+appear in upgrade_path (see section 8).
+
+--------------------------------------------------------------------------------
+3. PRODUCT MODEL (CATALOG)
+--------------------------------------------------------------------------------
+Each Product has:
+  - id (SKU), name, category — role_type is INFERRED from text (catalog.py
+    _infer_role_type): order of checks — bundle keywords, soil structure,
+    soil chemistry, biology, uptake, nutrition keywords, visual (iron/greening),
+    default nutrition.
+
+  - problem_scores: eight problem dimensions (yellowing, slow_growth, …).
+  - soil_scores: six soil dimensions.
+  - use_case_scores: lawn, garden_beds, indoor_plants, pots, farms (0..1 in CSV).
+  - lawn_goal_scores, garden_goal_scores, farm_goal_scores — per-goal rankings.
+  - seasonal_scores: spring..winter.
+  - Boolean flags: improves_* (synergy), is_iron_based, is_lime_based,
+    is_iron_sulphate — derived from name/category/role text.
+
+--------------------------------------------------------------------------------
+4. DEFAULT SCORING WEIGHTS (Weights dataclass — scoring.py)
+--------------------------------------------------------------------------------
+  problem:   1.0
+  soil:      0.7
+  use_case:  0.6
+  goal_segment: 1.0 (implicit in goal layer, not a separate factor in base)
+  seasonal:  0.25
+  synergy:   0.2
+
+These multiply the respective match terms in the problems-mode base (see 5A).
+
+--------------------------------------------------------------------------------
+5A. PROBLEMS MODE — BASE SCORE
+--------------------------------------------------------------------------------
+Matches are dot-products normalized by user weight sum (_dot01):
+  problem_match = dot(user.problems, product.problem_scores)
+  soil_match    = dot(user.soils, product.soil_scores)
+
+use_case_match: single lookup from product.use_case_scores[user.use_case] if set.
+
+seasonal: product.seasonal_scores[user.season] if season != unknown.
+
+synergy: sum of fixed bonuses if product flags are true:
+  +0.4 soil structure, +0.35 biology, +0.3 uptake, +0.2 fertiliser efficiency,
+  +0.2 water infiltration, +0.15 visual greening.
+
+targeted_bonus (symptoms only):
+  - Lawn + yellowing (yellowing >= 0.35 AND (use_case == lawn OR patchy_lawn >= 0.35))
+    AND product.is_iron_based: +1.15
+  - Else yellowing >= 0.5 AND is_iron_based: +0.55
+  - Extra +0.4 if lawn_context AND bundle AND yellowing >= 0.5 AND patchy >= 0.35
+    AND is_iron_based (iron-based lawn bundles when yellowing + patchy).
+
+lawn_context (for bundle add-on above): use_case lawn OR goal_vertical lawn OR
+  (no use_case/goal_vertical and patchy_lawn OR yellowing OR slow_growth > 0).
+
+base =   weights.problem   * problem_match
+       + weights.soil       * soil_match
+       + weights.use_case   * use_case_match
+       + weights.seasonal   * seasonal
+       + weights.synergy    * synergy
+       + targeted_bonus
+
+--------------------------------------------------------------------------------
+5B. GOALS MODE — BASE SCORE
+--------------------------------------------------------------------------------
+Requires goal_vertical + goal_weights → effective_goal_weights (goal_layer.py):
+  - Starts from default priorities per vertical (lawn/garden/farm).
+  - Multiplies by user goal selections and intent factors (_intent_goal_factors).
+  - Normalizes and caps any single goal at MAX_SINGLE_GOAL_SHARE = 0.42.
+
+goal_match = dot(effective_goal_weights, product’s goal scores for that vertical).
+
+goal_alignment_01 and raw average from goal_alignment_01().
+
+goal_multiplier(alignment_01, intent): maps alignment to a band; lo/hi ~ 0.94–1.28
+  (rescue_mode uses a slightly narrower band).
+
+pair_goal_bonus: small bonus when complementary goal pairs are both selected and
+  the product scores well on both (capped at 0.18).
+
+stage_alignment_bonus: garden-only (_garden_stage_alignment_bonus) — nudges FFR vs
+  RSL lines for establishment + root vs flowering goals.
+
+context_engine (weighted mix, NOT using goal_match directly in this term):
+  0.35 * use_case * use_case_match
++ 0.42 * seasonal * seasonal
++ 0.38 * soil * soil_match
++ 0.10 * synergy * synergy
++ 0.05 * problem * problem_match
+
+base = context_engine * goal_multiplier + pair_goal_bonus + stage_alignment_bonus
+
+--------------------------------------------------------------------------------
+6. ROLE MULTIPLIER (applied to base for BOTH modes)
+--------------------------------------------------------------------------------
+Final score = base * role_multiplier(role_type, intent).
+
+role_multiplier defaults (by RoleType):
+  SOIL_STRUCTURE: 1.35 (1.25 if intent maintenance_mode)
+  BIOLOGY: 1.25
+  UPTAKE: 1.18
+  NUTRITION: 1.0
+  VISUAL: 0.75 (0.85 if intent rescue_mode)
+  BUNDLE: 1.45
+  default: 1.0
+
+Problems mode intent is always rescue_mode → visual gets 0.85.
+
+--------------------------------------------------------------------------------
+7. STACKING (stacking.py)
+--------------------------------------------------------------------------------
+ROLE_ORDER for supports: SOIL_STRUCTURE → SOIL_CHEMISTRY → BIOLOGY → UPTAKE →
+NUTRITION → VISUAL.
+
+build_stack (problems / non-goals individual plan):
+  - Pick highest-scoring product that passes is_valid_primary (constraints).
+  - Add at most one product per role in order; skip role equal to primary’s role.
+  - PROBLEMS MODE: do NOT add NUTRITION as a support layer if the primary is NOT
+    nutrition — fertiliser only appears if it is the primary (or implied by role).
+  - Re-sort non-primary layers by ROLE_ORDER.
+
+build_stack_goals (goals mode):
+  - Primary prefers first valid primary that is NOT NUTRITION; else first valid.
+  - Supports skip NUTRITION entirely — fertiliser is primary_fertiliser (or
+    CHAMPION pair) separately.
+
+is_valid_primary / incompatible_with_stack (constraints.py):
+  - Visual cannot be primary.
+  - Lockout >= 0.5: nutrition cannot be primary; nutrition in stack needs an
+    unlock layer (uptake/biology/soil_chemistry) first.
+  - No two iron-based products in one stack; lime vs iron sulphate rules.
+  - Visual in stack needs foundation (soil/chemistry/biology/uptake) first.
+
+--------------------------------------------------------------------------------
+8. BUNDLES
+--------------------------------------------------------------------------------
+top_bundles(scored, user, limit):
+  - Filters RoleType.BUNDLE, then GOALS MODE vertical filter:
+      lawn:  keep only if sum(garden_goal_scores) <= sum(lawn_goal_scores)
+      garden: keep only if sum(lawn_goal_scores) <= sum(garden_goal_scores)
+      farm:   keep only if max(lawn,garden) <= sum(farm_goal_scores)
+  - Sort by score, take top `limit` (default 3).
+
+bundle_override_decision:
+  - Goals: override if confidence <= 0.5 AND at least 4 active goals (>= 0.35).
+  - Problems: various triggers (low confidence + rescue/diagnosis intent <= 0.55,
+    3+ active problems, 2+ problems with low confidence, nutrient lockout +
+    soil compaction/water/hydrophobic overlap). Note: problems intent is rescue.
+
+recommend.py upgrade_path:
+  - If bundles exist: show 2 options when confidence <= 0.6 OR intent in
+    rescue/diagnosis — with problems always rescue, this often yields 2 bundles
+    when upgrade list is non-empty; else 1.
+
+--------------------------------------------------------------------------------
+9. CHAMPION TURF PAIR (886 / 892)
+--------------------------------------------------------------------------------
+lawn_context: use_case lawn OR goal_vertical lawn OR patchy_lawn > 0.
+
+champion_turf_pair_warranted: the educational pair is shown only if lawn_context
+AND both SKUs exist AND:
+  - Goals + lawn + effective_goal_weights: best of 886/892 goal_match >= 76% of
+    catalog max goal_match; OR
+  - Goals + lawn + no effective weights: Champion rank <= 14 in sorted list; OR
+  - Otherwise: score >= 54% of top product OR rank <= 28.
+
+When the pair is shown in goals mode, primary_fertiliser is omitted (pair is the
+fertiliser tier). API includes champion_turf_pair in explanations.
+
+--------------------------------------------------------------------------------
+10. OUTPUT (Recommendation)
+--------------------------------------------------------------------------------
+  - primary, stack (ordered products), upgrade_path (bundle products),
+    primary_fertiliser (goals, optional),
+    explanations: bundle_override, champion_turf_pair, top_candidates, notes,
+      input snapshot (effective_goal_weights when applicable).
+
+--------------------------------------------------------------------------------
+11. WEB UI (app.py) — BEHAVIOUR SUMMARY
+--------------------------------------------------------------------------------
+  - Recommendation style: problems vs goals; intent dropdown only for goals
+    (Establishment / Maintenance / Performance); problems forces rescue in engine.
+  - Results group “Additional products”, “Recommended steps”, “Individual plan”,
+    and “Upgrade options (bundles)” inside one stack-item per section with nested
+    product cards.
+  - CHAMPION block: single container with two columns and per-SKU notices.
+
+--------------------------------------------------------------------------------
+12. FILES TO READ IN CODE
+--------------------------------------------------------------------------------
+  pd_engine/scoring.py       — scoring, synergy, targeted_bonus, role_multiplier
+  pd_engine/goal_layer.py    — effective_goal_weights, goal_multiplier, synergy pairs
+  pd_engine/stacking.py      — build_stack, build_stack_goals
+  pd_engine/constraints.py   — stack and primary rules
+  pd_engine/bundles.py       — bundle override, top_bundles vertical filter
+  pd_engine/champion_turf.py — CHAMPION gating
+  pd_engine/intent.py        — UserInput construction, problems → rescue
+  pd_engine/recommend.py     — orchestration
+  pd_engine/catalog.py       — CSV load, role inference, flags
+
+================================================================================
+END OF DOCUMENT (align with codebase when behaviour changes)
+================================================================================
