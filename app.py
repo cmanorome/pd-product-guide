@@ -236,10 +236,7 @@ async def home() -> str:
         <select id="use_case">
           <option value="">Not sure</option>
           <option value="lawn">Lawn</option>
-          <option value="garden_beds">Garden beds</option>
-          <option value="pots">Pots / planters</option>
-          <option value="indoor_plants">Indoor plants</option>
-          <option value="farms">Farm / acreage</option>
+          <option value="garden_beds">Garden (beds, veg, flowers, pots)</option>
         </select>
       </div>
       <div class="card">
@@ -255,7 +252,7 @@ async def home() -> str:
     <div id="section_goals" class="hidden">
       <h3>What do you want?</h3>
       <p class="muted">Tick one or more. These change with where you’re using it.</p>
-      <div id="goals_need_place" class="tip hidden">Choose where you’re using it above, and we’ll show lawn, garden, or farm goals.</div>
+      <div id="goals_need_place" class="tip hidden">Choose where you’re using it above, and we’ll show lawn or garden goals.</div>
       <div id="goal_panel_lawn" class="grid hidden">
         <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="deep_green_colour"/><div class="txt"><div class="title">Deep green colour</div></div></div></div>
         <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="thickening_and_density"/><div class="txt"><div class="title">Thickening and density</div></div></div></div>
