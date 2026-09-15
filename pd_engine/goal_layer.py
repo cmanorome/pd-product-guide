@@ -17,11 +17,11 @@ from .types import GoalVertical, Intent, Product, UserInput
 
 # Priorities per vertical (sum ≈ 1.0) — “what success means” by system
 DEFAULT_PRIORITY_LAWN: dict[str, float] = {
-    "deep_green_colour": 0.28,
-    "thickening_and_density": 0.26,
-    "fast_recovery_from_stress": 0.16,
-    "weed_suppression_through_dominance": 0.15,
-    "low_maintenance_resilience": 0.15,
+    "deep_green_colour": 0.18,
+    "thickening_and_density": 0.28,
+    "fast_recovery_from_stress": 0.22,
+    "weed_suppression_through_dominance": 0.16,
+    "low_maintenance_resilience": 0.16,
 }
 
 DEFAULT_PRIORITY_GARDEN: dict[str, float] = {
@@ -33,11 +33,11 @@ DEFAULT_PRIORITY_GARDEN: dict[str, float] = {
 }
 
 DEFAULT_PRIORITY_FARM: dict[str, float] = {
-    "yield_increase": 0.30,
-    "soil_efficiency": 0.22,
+    "yield_increase": 0.22,
+    "soil_efficiency": 0.28,
     "water_efficiency": 0.20,
     "crop_uniformity": 0.16,
-    "reduced_input_dependency": 0.12,
+    "reduced_input_dependency": 0.14,
 }
 
 

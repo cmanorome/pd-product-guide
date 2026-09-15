@@ -21,9 +21,9 @@ CHAMPION_GOAL_MATCH_MIN_FRAC_OF_MAX = 0.76  # goals+lawn+effective weights: vs c
 
 
 def lawn_context(user: UserInput) -> bool:
-    if user.use_case == "lawn":
-        return True
-    if user.goal_vertical == "lawn":
+    if user.use_case in ("garden_beds", "pots", "indoor_plants") or user.goal_vertical == "garden":
+        return False
+    if user.use_case == "lawn" or user.goal_vertical == "lawn":
         return True
     if float(user.problems.get("patchy_lawn", 0.0)) > 0:
         return True

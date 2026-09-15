@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from pathlib import Path
 
-from .bundles import bundle_override_decision, top_bundles
+from .bundles import top_bundles
 from .catalog import Catalog
 from .champion_turf import (
     CHAMPION_FAIRWAY_ID,
@@ -15,6 +15,7 @@ from .champion_turf import (
     GREENS_TAG,
     champion_turf_pair_warranted,
 )
+from .constraints import product_fits_context, recommended_max_stack
 from .goal_layer import effective_goal_weights
 from .intent import build_user_input
 from .scoring import Weights, score_product, sort_scored
@@ -58,9 +59,21 @@ def _goals_primary_fertiliser(scored_sorted: list[ScoredProduct], user: UserInpu
     """Highest-scored NUTRITION product for goals mode (explicit fertiliser line in UI)."""
     if user.recommendation_mode != "goals":
         return None
+    # Planting stage: Roots, Shoots & Leaves is the vegetative feed.
+    if (
+        user.intent == "establishment_mode"
+        and user.goal_vertical == "garden"
+        and float(user.goal_weights.get("root_development_transplant", 0.0)) >= 0.35
+    ):
+        for sp in scored_sorted:
+            if sp.product.id == "1156" and product_fits_context(sp.product, user).ok:
+                return sp.product
     for sp in scored_sorted:
-        if sp.product.role_type == RoleType.NUTRITION:
-            return sp.product
+        if sp.product.role_type != RoleType.NUTRITION:
+            continue
+        if not product_fits_context(sp.product, user).ok:
+            continue
+        return sp.product
     return None
 
 
@@ -68,7 +81,7 @@ def recommend(
     raw_input: dict,
     *,
     catalog_csv_path: str | Path = Path(__file__).resolve().parents[1] / "plant_doctor_recommendation_engine_template.csv",
-    max_stack: int = 4,
+    max_stack: int | None = None,
     weights: Weights | None = None,
 ) -> Recommendation:
     """
@@ -79,6 +92,7 @@ def recommend(
     """
     user: UserInput = build_user_input(raw_input)
     w = weights or Weights()
+    cap = recommended_max_stack(user) if max_stack is None else max_stack
 
     catalog = Catalog.from_csv(catalog_csv_path)
     scored = [score_product(p, user, weights=w) for p in catalog.products]
@@ -97,8 +111,7 @@ def recommend(
             "why_this_works": getattr(p, "why_this_works", None),
         }
 
-    bundle_decision = bundle_override_decision(user)
-    upgrade = top_bundles(scored_sorted, user=user, limit=3)
+    upgrade = top_bundles(scored_sorted, user=user, limit=2)
 
     def input_snapshot() -> dict:
         snap = {
@@ -106,6 +119,11 @@ def recommend(
             "goal_vertical": user.goal_vertical,
             "goal_weights": user.goal_weights,
             "use_case": user.use_case,
+            "soils": user.soils,
+            "soil_ph": user.soil_ph,
+            "soil_ph_method": user.soil_ph_method if user.soil_ph is not None else None,
+            "organic_matter_pct": user.organic_matter_pct,
+            "soil_test_notes": list(user.soil_test_notes),
         }
         if user.recommendation_mode == "goals" and not user.goal_weights:
             snap["warning"] = "No goals selected — pick at least one goal, or results will be weak."
@@ -115,72 +133,12 @@ def recommend(
                 snap["effective_goal_weights"] = egw
         return snap
 
-    if bundle_decision.should_override and upgrade:
-        primary = upgrade[0]
-        stack = [primary]
-
-        # Even when we override to a bundle, we still generate the best
-        # “build it yourself” individual stack for transparency.
-        non_bundle_scored = [sp for sp in scored_sorted if sp.product.role_type != RoleType.BUNDLE]
-        if user.recommendation_mode == "goals":
-            individual_plan = (
-                build_stack_goals(non_bundle_scored, user, max_stack=max_stack)
-                if non_bundle_scored
-                else None
-            )
-        else:
-            individual_plan = build_stack(non_bundle_scored, user, max_stack=max_stack) if non_bundle_scored else None
-
-        champ = _champion_turf_pair(catalog, user, product_dict, scored_sorted)
-        fert_primary = (
-            None
-            if (user.recommendation_mode == "goals" and champ is not None)
-            else (_goals_primary_fertiliser(scored_sorted, user) if user.recommendation_mode == "goals" else None)
-        )
-        explanations = {
-            "bundle_override": True,
-            "bundle_reason": bundle_decision.reason,
-            "intent": user.intent,
-            "confidence": user.confidence,
-            "input": input_snapshot(),
-            "champion_turf_pair": champ,
-            "individual_plan": (
-                None
-                if individual_plan is None
-                else {
-                    "primary": product_dict(individual_plan.primary),
-                    "stack": [product_dict(p) for p in individual_plan.stack],
-                    "notes": individual_plan.notes,
-                }
-            ),
-            "top_candidates": [
-                {
-                    "id": sp.product.id,
-                    "name": sp.product.name,
-                    "role_type": sp.product.role_type.value,
-                    "score": sp.score,
-                    "breakdown": sp.breakdown,
-                }
-                for sp in scored_sorted[:10]
-            ],
-        }
-        return Recommendation(
-            intent=user.intent,
-            season=user.season,
-            primary=primary,
-            stack=stack,
-            upgrade_path=upgrade[1:],
-            explanations=explanations,
-            primary_fertiliser=fert_primary,
-        )
-
-    # Normal mode: prefer individual products as the core plan.
-    # Bundles are suggested as upgrades unless override triggers.
+    # Individual products are the plan. Kits stay in upgrade_path (“Or use a kit”).
     non_bundle_scored = [sp for sp in scored_sorted if sp.product.role_type != RoleType.BUNDLE]
     if user.recommendation_mode == "goals":
-        plan = build_stack_goals(non_bundle_scored or scored_sorted, user, max_stack=max_stack)
+        plan = build_stack_goals(non_bundle_scored or scored_sorted, user, max_stack=cap)
     else:
-        plan = build_stack(non_bundle_scored or scored_sorted, user, max_stack=max_stack)
+        plan = build_stack(non_bundle_scored or scored_sorted, user, max_stack=cap)
 
     champ = _champion_turf_pair(catalog, user, product_dict, scored_sorted)
     fert_primary = (
@@ -189,13 +147,7 @@ def recommend(
         else (_goals_primary_fertiliser(scored_sorted, user) if user.recommendation_mode == "goals" else None)
     )
 
-    # Upgrade path: bundles appear as a “shortcut” option.
-    upgrade_path = []
-    if upgrade:
-        if user.confidence <= 0.6 or user.intent in ("rescue_mode", "diagnosis_mode"):
-            upgrade_path = upgrade[:2]
-        else:
-            upgrade_path = upgrade[:1]
+    upgrade_path = upgrade
 
     explanations = {
         "bundle_override": False,

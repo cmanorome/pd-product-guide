@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from .goal_columns import ALL_GOAL_KEYS
+from .soil_test import merge_soil_test, parse_soil_test_fields
 from .types import GoalVertical, Intent, RecommendationMode, UserInput
 
 
@@ -111,9 +112,20 @@ def build_user_input(raw: dict) -> UserInput:
             use_case = "farms"
 
     problems = raw.get("problems") or {}
-    soils = raw.get("soils") or {}
+    soils_raw = raw.get("soils") or {}
+    soils = {k: float(v) for k, v in soils_raw.items() if float(v) > 0}
     confidence = float(raw.get("confidence", 0.6) or 0.6)
     confidence = max(0.0, min(1.0, confidence))
+
+    soil_ph, ph_method, om_pct = parse_soil_test_fields(raw)
+    soils, soil_notes = merge_soil_test(
+        soils,
+        ph=soil_ph,
+        method=ph_method,
+        organic_matter_pct=om_pct,
+    )
+    if soil_ph is not None or om_pct is not None:
+        confidence = min(1.0, confidence + 0.08)
 
     return UserInput(
         intent=intent,
@@ -123,7 +135,11 @@ def build_user_input(raw: dict) -> UserInput:
         goal_vertical=goal_vertical,
         goal_weights=goal_weights,
         problems={k: float(v) for k, v in problems.items()},
-        soils={k: float(v) for k, v in soils.items()},
+        soils=soils,
         confidence=confidence,
+        soil_ph=soil_ph,
+        soil_ph_method=ph_method,
+        organic_matter_pct=om_pct,
+        soil_test_notes=soil_notes,
     )
 

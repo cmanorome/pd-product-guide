@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .constraints import product_fits_context
 from .types import Product, RoleType, ScoredProduct, UserInput
 
 def _bundle_matches_goals_vertical(product: Product, user: UserInput) -> bool:
@@ -33,31 +34,7 @@ class BundleDecision:
 
 
 def bundle_override_decision(user: UserInput) -> BundleDecision:
-    if user.recommendation_mode == "goals":
-        active_goals = [k for k, v in user.goal_weights.items() if float(v) >= 0.35]
-        if user.confidence <= 0.5 and len(active_goals) >= 4:
-            return BundleDecision(
-                True,
-                "Many goals selected with lower confidence — a full-system bundle is suggested.",
-            )
-        return BundleDecision(False, None)
-
-    # Core triggers from your spec (symptom / soil mode)
-    active_problems = [k for k, v in user.problems.items() if float(v) >= 0.35]
-    overlap = (float(user.problems.get("nutrient_lockout", 0.0)) >= 0.5) and (
-        float(user.problems.get("compaction", 0.0)) >= 0.35
-        or float(user.problems.get("poor_water_retention", 0.0)) >= 0.35
-        or float(user.problems.get("hydrophobic", 0.0)) >= 0.35  # may appear via soils in some payloads
-    )
-
-    if user.intent in ("rescue_mode", "diagnosis_mode") and user.confidence <= 0.55:
-        return BundleDecision(True, "Low confidence in rescue/diagnosis: default to full-system bundle.")
-    if len(active_problems) >= 3:
-        return BundleDecision(True, "Multiple overlapping problems detected: default to a bundle.")
-    if user.confidence <= 0.45 and len(active_problems) >= 2:
-        return BundleDecision(True, "Low confidence with multiple issues: default to a bundle.")
-    if overlap:
-        return BundleDecision(True, "Soil limitation + lockout overlap: default to a bundle.")
+    """Kits stay in the upgrade path — never replace the step-by-step product plan."""
     return BundleDecision(False, None)
 
 
@@ -72,6 +49,7 @@ def top_bundles(
         for sp in scored
         if sp.product.role_type == RoleType.BUNDLE
         and (user is None or _bundle_matches_goals_vertical(sp.product, user))
+        and (user is None or product_fits_context(sp.product, user).ok)
     ]
     bundles_sorted = sorted(bundles, key=lambda s: s.score, reverse=True)
     return [b.product for b in bundles_sorted[:limit]]
