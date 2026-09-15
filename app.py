@@ -163,6 +163,8 @@ async def home() -> str:
       details.fold { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: white; margin-top: 14px; }
       details.fold > summary { cursor: pointer; font-weight: 600; font-size: 14px; }
       details.fold > summary + * { margin-top: 10px; }
+      .why-list { margin: 0; padding-left: 18px; }
+      .why-list li { margin: 0 0 8px; font-size: 13px; line-height: 1.45; color: #374151; }
 
       .results { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
       .kicker { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin: 0 0 6px; }
@@ -695,6 +697,14 @@ async def home() -> str:
           const nested = `<p class="muted" style="margin:0 0 8px;">Kits if you’d rather one mix than a few bottles.</p>
             <div class="step-list">${data.upgrade_path.map((p) => compactProduct(p, "Kit")).join("")}</div>`;
           html += foldBlock("Or use a kit", nested);
+        }
+
+        const why = Array.isArray(ex.choice_summary) ? ex.choice_summary.filter(Boolean) : [];
+        if (why.length) {
+          html += foldBlock(
+            "Why we chose these",
+            `<ul class="why-list">${why.map((line) => `<li>${esc(line)}</li>`).join("")}</ul>`
+          );
         }
 
         document.getElementById("friendly").innerHTML = html || `<div class="empty">No recommendation returned.</div>`;

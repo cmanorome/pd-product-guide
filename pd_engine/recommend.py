@@ -20,7 +20,167 @@ from .goal_layer import effective_goal_weights
 from .intent import build_user_input
 from .scoring import Weights, score_product, sort_scored
 from .stacking import build_stack, build_stack_goals
-from .types import Recommendation, RoleType, UserInput, ScoredProduct
+from .types import Product, Recommendation, RoleType, UserInput, ScoredProduct
+
+
+_PROBLEM_LABELS = {
+    "yellowing": "yellowing",
+    "slow_growth": "slow growth",
+    "weak_roots": "weak roots",
+    "nutrient_lockout": "nutrient lockout",
+    "patchy_lawn": "a patchy lawn",
+    "compaction": "compaction",
+    "poor_water_retention": "poor water holding",
+    "fungal_issues": "fungal pressure",
+    "poor_flowering": "poor flowering or fruiting",
+}
+
+_GOAL_LABELS = {
+    "deep_green_colour": "deeper green colour",
+    "thickening_and_density": "thicker, denser turf",
+    "fast_recovery_from_stress": "faster recovery from stress",
+    "weed_suppression_through_dominance": "a lawn that crowds out weeds",
+    "low_maintenance_resilience": "low-maintenance resilience",
+    "strong_flowering_and_fruiting": "more flowers, fruit and veg",
+    "improved_soil_fertility": "richer soil over time",
+    "root_development_transplant": "stronger roots and transplanting",
+    "pest_and_disease_resilience": "pest and disease resilience",
+    "consistent_growth_across_seasons": "steady growth through the year",
+    "yield_increase": "higher yield",
+    "soil_efficiency": "better soil efficiency",
+    "water_efficiency": "better water efficiency",
+    "crop_uniformity": "more even crops",
+    "reduced_input_dependency": "less input dependence over time",
+}
+
+_USE_CASE_LABELS = {
+    "lawn": "lawn",
+    "garden_beds": "garden beds",
+    "pots": "pots",
+    "indoor_plants": "indoor plants",
+    "farms": "farm / acreage",
+}
+
+_ROLE_JOB = {
+    RoleType.BIOLOGY: "to support soil biology so plants use the rest of the program",
+    RoleType.UPTAKE: "to help unlock and carry nutrients",
+    RoleType.NUTRITION: "to feed growth",
+    RoleType.VISUAL: "to restore colour where leaves or turf have yellowed",
+    RoleType.SOIL_STRUCTURE: "to improve how the soil holds and moves water",
+    RoleType.SOIL_CHEMISTRY: "to adjust soil pH so nutrients stay available",
+    RoleType.BUNDLE: "as a one-pack option covering several steps",
+}
+
+
+def _join_en(items: list[str]) -> str:
+    clean = [x for x in items if x]
+    if not clean:
+        return ""
+    if len(clean) == 1:
+        return clean[0]
+    if len(clean) == 2:
+        return f"{clean[0]} and {clean[1]}"
+    return ", ".join(clean[:-1]) + f", and {clean[-1]}"
+
+
+def _short_name(product: Product) -> str:
+    name = (product.name or "").strip()
+    if "(" in name:
+        name = name.split("(")[0].strip()
+    return name or "This product"
+
+
+def _product_why(product: Product) -> str | None:
+    reason = (getattr(product, "short_reason", None) or "").strip()
+    if not reason:
+        return None
+    if reason.endswith("."):
+        reason = reason[:-1]
+    if len(reason) > 1:
+        return reason[0].lower() + reason[1:]
+    return reason.lower()
+
+
+def _choice_summary(
+    user: UserInput,
+    stack: list[Product],
+    *,
+    fertiliser: Product | None,
+    champion: dict | None,
+    kits: list[Product],
+    notes: list[str],
+) -> list[str]:
+    """Plain-language 'why these products' — no scores or engine jargon."""
+    lines: list[str] = []
+
+    place = _USE_CASE_LABELS.get(user.use_case or "", "")
+    if user.recommendation_mode == "goals":
+        wants = _join_en(
+            [_GOAL_LABELS.get(k, k.replace("_", " ")) for k, v in user.goal_weights.items() if float(v) >= 0.35]
+        )
+        if place and wants:
+            lines.append(f"This plan is for {place}, aiming for {wants}.")
+        elif wants:
+            lines.append(f"This plan is aiming for {wants}.")
+        elif place:
+            lines.append(f"This plan is for {place}.")
+    else:
+        issues = _join_en(
+            [_PROBLEM_LABELS.get(k, k.replace("_", " ")) for k, v in user.problems.items() if float(v) >= 0.35]
+        )
+        if place and issues:
+            lines.append(f"This plan is for {place}, to help with {issues}.")
+        elif issues:
+            lines.append(f"This plan is to help with {issues}.")
+        elif place:
+            lines.append(f"This plan is for {place}.")
+
+    soils = _join_en([k.replace("_", " ") for k, v in user.soils.items() if float(v) >= 0.35])
+    if soils:
+        lines.append(f"Soil notes we used: {soils}.")
+    for note in list(user.soil_test_notes)[:2]:
+        if note:
+            lines.append(str(note))
+
+    seen: set[str] = set()
+    for i, product in enumerate(stack):
+        seen.add(product.id)
+        why = _product_why(product)
+        job = _ROLE_JOB.get(product.role_type)
+        if i == 0:
+            if why:
+                lines.append(f"We start with {_short_name(product)} because {why}.")
+            elif job:
+                lines.append(f"We start with {_short_name(product)} {job}.")
+            else:
+                lines.append(f"We start with {_short_name(product)} as the best match for what you selected.")
+        elif job:
+            lines.append(f"Then {_short_name(product)} {job}.")
+        elif why:
+            lines.append(f"Then {_short_name(product)} because {why}.")
+        else:
+            lines.append(f"Then {_short_name(product)} to complete the program.")
+
+    if fertiliser is not None and fertiliser.id not in seen:
+        why = _product_why(fertiliser)
+        if why:
+            lines.append(f"The fertiliser pick is {_short_name(fertiliser)} because {why}.")
+        else:
+            lines.append(f"The fertiliser pick is {_short_name(fertiliser)} to feed growth.")
+
+    if champion:
+        lines.append(
+            "Champion Fairway and Greens Grade are both shown so you can match mowing height — everyday lawns vs fine, low-cut turf."
+        )
+
+    for note in notes:
+        if note:
+            lines.append(str(note))
+
+    if kits:
+        lines.append("Kits are listed separately if you’d rather one pack than a few bottles.")
+
+    return lines
 
 
 def _champion_turf_pair(
@@ -156,6 +316,14 @@ def recommend(
         "input": input_snapshot(),
         "champion_turf_pair": champ,
         "notes": plan.notes,
+        "choice_summary": _choice_summary(
+            user,
+            plan.stack,
+            fertiliser=fert_primary,
+            champion=champ,
+            kits=upgrade_path,
+            notes=plan.notes,
+        ),
         "top_candidates": [
             {
                 "id": sp.product.id,
