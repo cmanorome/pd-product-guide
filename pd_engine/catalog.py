@@ -7,6 +7,7 @@ from pathlib import Path
 
 from .goal_columns import FARM_GOAL_COLS, GARDEN_GOAL_COLS, LAWN_GOAL_COLS
 from .types import Product, RoleType, Season
+from .usage_guide import tips_for
 
 
 _PROBLEM_COLS = {
@@ -273,6 +274,7 @@ def load_products_from_template_csv(path: str | Path) -> list[Product]:
             improves_visual_greening = role_type == RoleType.VISUAL or contains_iron
 
             image_url, product_url = _extract_visual_assets(visual_code)
+            usage = tips_for(sku)
 
             products.append(
                 Product(
@@ -312,6 +314,10 @@ def load_products_from_template_csv(path: str | Path) -> list[Product]:
                     problem_explanation=(row.get("Problem Explanation") or "").strip() or None,
                     why_this_works=(row.get("Why This Works") or "").strip() or None,
                     app_logic_notes=(row.get("App Logic considerations") or "").strip() or None,
+                    apply_rate=usage.get("apply_rate"),
+                    apply_frequency=usage.get("apply_frequency"),
+                    mix_note=usage.get("mix_note"),
+                    usage_flags=usage.get("usage_flags") or {},
                 )
             )
 

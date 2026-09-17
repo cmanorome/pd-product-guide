@@ -184,6 +184,30 @@ async def home() -> str:
       details.more { margin-top: 6px; }
       details.more summary { cursor: pointer; color: var(--muted); font-size: 12px; }
       details.more p { margin: 8px 0 0; font-size: 13px; color: #374151; line-height: 1.45; }
+      .use-row { display: flex; flex-wrap: wrap; gap: 5px; margin: 6px 0 2px; }
+      .use-chip {
+        display: inline-flex; align-items: center; gap: 5px;
+        font-size: 11px; color: #374151; background: #f8faf9;
+        border: 1px solid var(--line); border-radius: 99px; padding: 2px 8px 2px 6px;
+      }
+      .use-dot, .use-mix {
+        width: 9px; height: 9px; border-radius: 99px; flex: 0 0 auto;
+      }
+      .use-mix { position: relative; width: 14px; }
+      .use-mix i {
+        position: absolute; top: 0; width: 9px; height: 9px; border-radius: 99px;
+        border: 1px solid #fff;
+      }
+      .use-mix i:first-child { left: 0; background: #0c783c; }
+      .use-mix i:last-child { left: 5px; background: #e4a818; }
+      .use-dot.independent { background: #e4a818; }
+      .use-dot.water_in { background: #3c6cb4; }
+      .use-dot.soil_drench { background: #cc5424; }
+      .use-dot.foliar { background: #0c783c; }
+      .use-dot.fertigation { background: #183c9c; }
+      .use-dot.hydroponic { background: #18a8a8; }
+      .use-dot.hose_on { background: #60b43c; }
+      .use-dot.mix_with_iron { background: #e4a818; }
       .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
       @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } .hero-main { flex-direction: column; } }
       .empty { color: var(--muted); font-size: 14px; padding: 16px 0; }
@@ -552,6 +576,34 @@ async def home() -> str:
         if (!extra) return "";
         return `<details class="more"><summary>Why this helps</summary><p>${esc(extra)}</p></details>`;
       }
+      function applyTip(p) {
+        if (!p) return "";
+        const bits = [p.apply_rate, p.apply_frequency, p.mix_note].filter(Boolean);
+        if (!bits.length) return "";
+        return `<details class="more"><summary>How to apply</summary><p>${esc(bits.join(" "))}</p></details>`;
+      }
+      const USAGE_META = [
+        { key: "mix_together", label: "Mix as concentrates" },
+        { key: "independent", label: "Apply independently" },
+        { key: "water_in", label: "Water in" },
+        { key: "soil_drench", label: "Soil drench" },
+        { key: "foliar", label: "Foliar" },
+        { key: "fertigation", label: "Fertigation" },
+        { key: "hydroponic", label: "Hydroponic" },
+        { key: "hose_on", label: "Hose on" },
+        { key: "mix_with_iron", label: "Can mix with iron" },
+      ];
+      function usageMark(key) {
+        if (key === "mix_together") return `<span class="use-mix" aria-hidden="true"><i></i><i></i></span>`;
+        return `<i class="use-dot ${esc(key)}" aria-hidden="true"></i>`;
+      }
+      function renderUsage(p) {
+        const flags = (p && p.usage) || {};
+        const chips = USAGE_META.filter((u) => flags[u.key]).map((u) =>
+          `<span class="use-chip">${usageMark(u.key)}${esc(u.label)}</span>`
+        );
+        return chips.length ? `<div class="use-row">${chips.join("")}</div>` : "";
+      }
       function heroCard(p, kicker) {
         if (!p) return "";
         return `
@@ -561,9 +613,11 @@ async def home() -> str:
               ${prodImg(p)}
               <div>
                 <h4 class="prod-name">${esc(p.name)}</h4>
+                ${renderUsage(p)}
                 <p class="prod-why">${esc(oneLiner(p))}</p>
                 <div class="prod-actions">${viewLink(p)}</div>
                 ${extraWhy(p)}
+                ${applyTip(p)}
               </div>
             </div>
           </article>`;
@@ -578,9 +632,11 @@ async def home() -> str:
             <div>
               ${role ? `<div class="role-tag">${esc(role)}</div>` : ""}
               <div class="prod-name" style="font-size:15px;">${esc(p.name)}</div>
+              ${renderUsage(p)}
               <p class="prod-why">${esc(oneLiner(p))}</p>
               <div class="prod-actions">${viewLink(p)}</div>
               ${extraWhy(p)}
+              ${applyTip(p)}
             </div>
           </div>`;
       }
@@ -592,9 +648,11 @@ async def home() -> str:
             <div>
               ${kicker ? `<div class="role-tag">${esc(kicker)}</div>` : ""}
               <div class="prod-name" style="font-size:15px;">${esc(p.name)}</div>
+              ${renderUsage(p)}
               <p class="prod-why">${esc(oneLiner(p))}</p>
               <div class="prod-actions">${viewLink(p)}</div>
               ${extraWhy(p)}
+              ${applyTip(p)}
             </div>
           </div>`;
       }
@@ -611,9 +669,11 @@ async def home() -> str:
               ${prodImg(p)}
               <div>
                 <div class="prod-name" style="font-size:15px;">${esc(p.name)}</div>
+                ${renderUsage(p)}
                 <p class="prod-why">${esc(oneLiner(p) || slot.label || "")}</p>
                 <div class="prod-actions">${viewLink(p)}</div>
                 ${detail}
+                ${applyTip(p)}
               </div>
             </div>
           </div>`;
@@ -782,6 +842,10 @@ async def api_recommend(request: Request) -> dict[str, Any]:
             "short_reason": getattr(p, "short_reason", None),
             "problem_explanation": getattr(p, "problem_explanation", None),
             "why_this_works": getattr(p, "why_this_works", None),
+            "apply_rate": getattr(p, "apply_rate", None),
+            "apply_frequency": getattr(p, "apply_frequency", None),
+            "mix_note": getattr(p, "mix_note", None),
+            "usage": getattr(p, "usage_flags", None) or {},
         }
 
     ex = rec.explanations

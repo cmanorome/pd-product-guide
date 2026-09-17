@@ -99,6 +99,10 @@ class Product:
     problem_explanation: str | None = None
     why_this_works: str | None = None
     app_logic_notes: str | None = None
+    apply_rate: str | None = None
+    apply_frequency: str | None = None
+    mix_note: str | None = None
+    usage_flags: dict[str, bool] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)

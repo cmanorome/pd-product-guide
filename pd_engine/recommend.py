@@ -274,6 +274,10 @@ def recommend(
             "short_reason": getattr(p, "short_reason", None),
             "problem_explanation": getattr(p, "problem_explanation", None),
             "why_this_works": getattr(p, "why_this_works", None),
+            "apply_rate": getattr(p, "apply_rate", None),
+            "apply_frequency": getattr(p, "apply_frequency", None),
+            "mix_note": getattr(p, "mix_note", None),
+            "usage": getattr(p, "usage_flags", None) or {},
         }
 
     upgrade = top_bundles(scored_sorted, user=user, limit=2)

@@ -215,11 +215,20 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
         lawn_yellowing = yellowing >= 0.35 and lawn_context
         ironish = product.contains_iron or product.is_iron_based
         if ironish and lawn_yellowing:
-            targeted_bonus += 1.15 if alkaline >= 0.35 else 0.90
+            if product.is_iron_chelate and alkaline >= 0.35:
+                targeted_bonus += 1.35
+            elif alkaline >= 0.35 and product.is_iron_sulphate:
+                targeted_bonus += 0.50
+            elif alkaline >= 0.35:
+                targeted_bonus += 0.70
+            else:
+                targeted_bonus += 0.90
         elif yellowing >= 0.5 and ironish:
             targeted_bonus += 0.55
         if product.is_iron_chelate and alkaline >= 0.35 and yellowing >= 0.35:
-            targeted_bonus += 0.25
+            targeted_bonus += 0.40
+        if product.is_iron_sulphate and lawn_context and fungal >= 0.35:
+            targeted_bonus += 0.40
         if yellowing >= 0.5 and slow >= 0.5 and product.role_type == RoleType.NUTRITION and ironish:
             targeted_bonus += 0.25
         if (
@@ -300,6 +309,10 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
     if product.is_high_nitrogen and user.season == "summer" and fungal >= 0.35:
         final *= 0.85
         # recorded below via reasons
+    if product.id in ("886", "892") and user.season == "summer":
+        final *= 0.88
+    if product.id == "A8X" and user.season in ("autumn", "winter"):
+        final *= 0.93
 
     reasons: list[str] = []
     if user.recommendation_mode == "goals":
@@ -328,6 +341,10 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
         reasons.append("Core range (Lawn Lovers Starter / Pro)")
     if product.is_high_nitrogen and user.season == "summer" and fungal >= 0.35:
         reasons.append("High-N downweighted in summer with fungal pressure")
+    if product.id in ("886", "892") and user.season == "summer":
+        reasons.append("Champion is easier on turf outside hot weather (avoid spreading over 30°C)")
+    if product.id == "A8X" and user.season in ("autumn", "winter"):
+        reasons.append("Activ8EXTRA is lighter in cooler months")
     reasons.append(f"Role priority: {product.role_type.value} × {mult:.2f}")
 
     return ScoredProduct(

@@ -13,8 +13,14 @@ class ConstraintResult:
 
 
 def iron_humic_spacing_needed(stack: list[Product]) -> bool:
-    """Liquid iron and humic/seaweed/wetter can share a program, but not a tank."""
-    return any(p.is_iron_based for p in stack) and any(p.is_incompatible_with_iron for p in stack)
+    """Liquid iron / iron sulphate and humic/seaweed/wetter can share a program, but not a tank.
+
+    EDTA iron chelate is labelled compatible with most fertilisers, so it does not trigger this.
+    """
+    irons = [p for p in stack if p.is_iron_based]
+    if not irons or all(p.is_iron_chelate for p in irons):
+        return False
+    return any(p.is_incompatible_with_iron for p in stack)
 
 
 def _on(user: UserInput, group: dict, key: str, thresh: float = 0.35) -> bool:

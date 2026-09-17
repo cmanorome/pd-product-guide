@@ -39,6 +39,9 @@ def _preferred_core(product: Product, user: UserInput) -> bool:
         return False
     if is_gardenish(user) and product.id == "A8X":
         return False
+    # EDTA chelate stays available on alkaline soil; Liquid Iron is the usual lawn colour pick otherwise.
+    if product.id == "LIR" and float(user.soils.get("alkaline", 0.0)) >= 0.35:
+        return False
     return True
 
 
