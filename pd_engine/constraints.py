@@ -83,11 +83,10 @@ def product_fits_context(product: Product, user: UserInput) -> ConstraintResult:
         ):
             return ConstraintResult(False, "Soil wetter is for water-repellent or poorly wetting soil.")
 
-    if product.id == "557":  # zeolite — sandy / leachy / low OM, not a default add-on
+    if product.id == "557":  # zeolite — sandy / leachy / low OM, not a default lockout fix
         if not (
             _on(user, user.soils, "sandy")
             or _on(user, user.soils, "low_organic_matter")
-            or _on(user, user.problems, "nutrient_lockout")
         ):
             return ConstraintResult(False, "Zeolite is for sandy, leachy, or low-buffer soils.")
 

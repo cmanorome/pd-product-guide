@@ -113,6 +113,8 @@ _GYPSUM_SKUS = frozenset({"1075", "636"})
 _WETTER_SKUS = frozenset({"664", "NSWL"})
 _LAWN_SPECIALIST_SKUS = frozenset({"886", "892", "LEN", "MG", "1231", "1235", "1239", "1253", "1243"})
 _GARDEN_REPRODUCTIVE_SKUS = frozenset({"575", "721"})
+# Lawn Lovers Starter (SWS + A8X + NSWL) and Pro (adds Quantum H, Liquid Iron, Stimulizer)
+_CORE_RANGE_SKUS = frozenset({"SWS", "A8X", "NSWL", "29800", "LIR", "STM"})
 
 
 def _has_token(blob: str, *tokens: str) -> bool:
@@ -235,6 +237,7 @@ def load_products_from_template_csv(path: str | Path) -> list[Product]:
             is_high_nitrogen = sku in _HIGH_N_SKUS
             is_incompatible_with_iron = sku in _IRON_INCOMPATIBLE_SKUS
             is_lawn_specialist = sku in _LAWN_SPECIALIST_SKUS
+            is_core_range = sku in _CORE_RANGE_SKUS
             is_garden_reproductive = sku in _GARDEN_REPRODUCTIVE_SKUS or (
                 "flowers" in blob and "fruit" in blob
             )
@@ -242,6 +245,10 @@ def load_products_from_template_csv(path: str | Path) -> list[Product]:
             # Keep them off turf ranking so lawn stays primary without hiding garden SKUs.
             if sku == "1156":
                 lawn_goal_scores = {k: min(float(v), 1.0) for k, v in lawn_goal_scores.items()}
+            # Dual-use biostimulants — lawn and garden.
+            if sku in ("STM", "29800"):
+                use_case_scores["lawn"] = 1.0
+                use_case_scores["garden_beds"] = 1.0
             is_garden_specialist = (
                 (not is_lawn_specialist)
                 and float(use_case_scores.get("lawn", 0.0)) <= 0
@@ -298,6 +305,7 @@ def load_products_from_template_csv(path: str | Path) -> list[Product]:
                     is_lawn_specialist=is_lawn_specialist,
                     is_garden_reproductive=is_garden_reproductive,
                     is_garden_specialist=is_garden_specialist,
+                    is_core_range=is_core_range,
                     short_reason=(row.get("Short Recommendation Reason") or "").strip() or None,
                     problem_explanation=(row.get("Problem Explanation") or "").strip() or None,
                     why_this_works=(row.get("Why This Works") or "").strip() or None,

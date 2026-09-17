@@ -128,6 +128,20 @@ def _garden_stage_alignment_bonus(product: Product, user: UserInput) -> tuple[fl
     return 0.0, None
 
 
+def _core_range_bonus(product: Product, user: UserInput) -> float:
+    """Lawn Lovers Starter/Pro SKUs are the default range we recommend most."""
+    if not product.is_core_range:
+        return 0.0
+    if is_gardenish(user):
+        # Activ8EXTRA is the lawn pack feed; garden keeps Activ8Mate / RSL / FFR.
+        if product.id == "A8X":
+            return 0.0
+        return 0.25
+    if is_lawnish(user) or user.use_case is None:
+        return 0.42
+    return 0.22
+
+
 def _context_fit(product: Product, user: UserInput) -> float:
     """Keep lawn primary, but stop turf SKUs crowding out garden lines (and vice versa)."""
     lawn_uc = float(product.use_case_scores.get("lawn", 0.0))
@@ -236,6 +250,7 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
         stage_alignment_bonus, stage_note = _garden_stage_alignment_bonus(product, user)
 
     context_fit = _context_fit(product, user)
+    core_bonus = _core_range_bonus(product, user)
 
     if user.recommendation_mode == "goals":
         context_engine = (
@@ -251,6 +266,7 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
             + pair_goal_bonus
             + stage_alignment_bonus
             + context_fit
+            + core_bonus
         )
     else:
         base = (
@@ -261,6 +277,7 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
             + weights.synergy * synergy
             + targeted_bonus
             + context_fit
+            + core_bonus
         )
 
     mult = role_multiplier(product.role_type, user=user)
@@ -292,6 +309,8 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
         reasons.append(f"Seasonal relevance: {seasonal:.2f}")
     if user.recommendation_mode == "problems" and targeted_bonus > 0:
         reasons.append(f"Targeted bonus: {targeted_bonus:.2f}")
+    if core_bonus > 0:
+        reasons.append("Core range (Lawn Lovers Starter / Pro)")
     if product.is_high_nitrogen and user.season == "summer" and fungal >= 0.35:
         reasons.append("High-N downweighted in summer with fungal pressure")
     reasons.append(f"Role priority: {product.role_type.value} × {mult:.2f}")
@@ -313,6 +332,7 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
             "stage_alignment_bonus": stage_alignment_bonus,
             "targeted_bonus": targeted_bonus,
             "context_fit": context_fit,
+            "core_range_bonus": core_bonus,
             "role_multiplier": mult,
             "base": base,
             "final": final,

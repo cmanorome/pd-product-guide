@@ -5,6 +5,7 @@ from dataclasses import dataclass
 from .constraints import (
     incompatible_with_stack,
     iron_humic_spacing_needed,
+    is_gardenish,
     is_valid_primary,
     product_fits_context,
     recommended_max_stack,
@@ -22,6 +23,9 @@ ROLE_ORDER: list[RoleType] = [
     RoleType.VISUAL,
 ]
 
+# If a Lawn Lovers core SKU is close to the role leader, prefer it.
+_CORE_PICK_RATIO = 0.85
+
 
 @dataclass(frozen=True)
 class StackPlan:
@@ -30,8 +34,17 @@ class StackPlan:
     notes: list[str]
 
 
-def _pick_from_role(scored: list[ScoredProduct], role: RoleType, stack: list[Product], user: UserInput) -> Product | None:
+def _preferred_core(product: Product, user: UserInput) -> bool:
+    if not product.is_core_range:
+        return False
+    if is_gardenish(user) and product.id == "A8X":
+        return False
+    return True
+
+
+def _first_eligible(scored: list[ScoredProduct], role: RoleType, stack: list[Product], user: UserInput) -> list[ScoredProduct]:
     iron_in_stack = any(p.is_iron_based for p in stack)
+    out: list[ScoredProduct] = []
     for sp in scored:
         if sp.product.role_type != role:
             continue
@@ -48,7 +61,9 @@ def _pick_from_role(scored: list[ScoredProduct], role: RoleType, stack: list[Pro
             continue
         if sp.product.is_iron_based and any(p.is_iron_based for p in stack):
             continue
-        return sp.product
+        out.append(sp)
+    if out:
+        return out
     # Second pass: if uptake was skipped for tank-mix, still allow a humic later in the program.
     if iron_in_stack and role == RoleType.UPTAKE:
         for sp in scored:
@@ -57,8 +72,18 @@ def _pick_from_role(scored: list[ScoredProduct], role: RoleType, stack: list[Pro
             if any(p.id == sp.product.id for p in stack):
                 continue
             if incompatible_with_stack(sp.product, stack, user).ok:
-                return sp.product
-    return None
+                out.append(sp)
+    return out
+
+
+def _pick_from_role(scored: list[ScoredProduct], role: RoleType, stack: list[Product], user: UserInput) -> Product | None:
+    candidates = _first_eligible(scored, role, stack, user)
+    if not candidates:
+        return None
+    core = next((sp for sp in candidates if _preferred_core(sp.product, user)), None)
+    if core is not None:
+        return core.product
+    return candidates[0].product
 
 
 def _finish_plan(stack: list[Product], notes: list[str]) -> StackPlan:
@@ -73,6 +98,27 @@ def _finish_plan(stack: list[Product], notes: list[str]) -> StackPlan:
     return StackPlan(primary=primary, stack=[primary] + rest_sorted, notes=notes)
 
 
+def _pick_primary_from(scored: list[ScoredProduct], user: UserInput, *, skip_nutrition: bool = False) -> Product | None:
+    first: ScoredProduct | None = None
+    core: ScoredProduct | None = None
+    for sp in scored:
+        if skip_nutrition and sp.product.role_type == RoleType.NUTRITION:
+            continue
+        if not is_valid_primary(sp.product, user).ok:
+            continue
+        if first is None:
+            first = sp
+        if core is None and _preferred_core(sp.product, user):
+            core = sp
+        if first is not None and core is not None:
+            break
+    if first is None:
+        return None
+    if core is not None and core.score >= first.score * _CORE_PICK_RATIO:
+        return core.product
+    return first.product
+
+
 def build_stack(scored: list[ScoredProduct], user: UserInput, *, max_stack: int | None = None) -> StackPlan:
     """
     Problems mode stacking:
@@ -82,12 +128,7 @@ def build_stack(scored: list[ScoredProduct], user: UserInput, *, max_stack: int 
     notes: list[str] = []
     cap = max_stack if max_stack is not None else recommended_max_stack(user)
 
-    primary: Product | None = None
-    for sp in scored:
-        res = is_valid_primary(sp.product, user)
-        if res.ok:
-            primary = sp.product
-            break
+    primary = _pick_primary_from(scored, user)
     if primary is None:
         for sp in scored:
             if sp.product.role_type != RoleType.VISUAL and product_fits_context(sp.product, user).ok:
@@ -148,15 +189,12 @@ def _pick_goals_foundation_primary(scored: list[ScoredProduct], user: UserInput)
                 continue
             if is_valid_primary(sp.product, user).ok:
                 return sp.product, notes
-    for sp in scored:
-        if sp.product.role_type == RoleType.NUTRITION:
-            continue
-        if not is_valid_primary(sp.product, user).ok:
-            continue
-        return sp.product, notes
-    for sp in scored:
-        if is_valid_primary(sp.product, user).ok:
-            return sp.product, notes
+    primary = _pick_primary_from(scored, user, skip_nutrition=True)
+    if primary is not None:
+        return primary, notes
+    primary = _pick_primary_from(scored, user)
+    if primary is not None:
+        return primary, notes
     for sp in scored:
         if sp.product.role_type != RoleType.VISUAL:
             notes.append("Fallback primary selection applied.")

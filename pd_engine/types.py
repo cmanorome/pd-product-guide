@@ -92,6 +92,8 @@ class Product:
     is_lawn_specialist: bool = False
     is_garden_reproductive: bool = False
     is_garden_specialist: bool = False
+    # Lawn Lovers Starter + Pro pack SKUs — default recommendable range
+    is_core_range: bool = False
 
     short_reason: str | None = None
     problem_explanation: str | None = None

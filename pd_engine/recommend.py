@@ -15,7 +15,7 @@ from .champion_turf import (
     GREENS_TAG,
     champion_turf_pair_warranted,
 )
-from .constraints import product_fits_context, recommended_max_stack
+from .constraints import is_lawnish, product_fits_context, recommended_max_stack
 from .goal_layer import effective_goal_weights
 from .intent import build_user_input
 from .scoring import Weights, score_product, sort_scored
@@ -228,6 +228,11 @@ def _goals_primary_fertiliser(scored_sorted: list[ScoredProduct], user: UserInpu
         for sp in scored_sorted:
             if sp.product.id == "1156" and product_fits_context(sp.product, user).ok:
                 return sp.product
+    # Lawn Lovers core feed for turf goals (Activ8EXTRA), unless Champion pair is used.
+    if is_lawnish(user):
+        for sp in scored_sorted:
+            if sp.product.id == "A8X" and product_fits_context(sp.product, user).ok:
+                return sp.product
     for sp in scored_sorted:
         if sp.product.role_type != RoleType.NUTRITION:
             continue
@@ -301,11 +306,7 @@ def recommend(
         plan = build_stack(non_bundle_scored or scored_sorted, user, max_stack=cap)
 
     champ = _champion_turf_pair(catalog, user, product_dict, scored_sorted)
-    fert_primary = (
-        None
-        if (user.recommendation_mode == "goals" and champ is not None)
-        else (_goals_primary_fertiliser(scored_sorted, user) if user.recommendation_mode == "goals" else None)
-    )
+    fert_primary = _goals_primary_fertiliser(scored_sorted, user) if user.recommendation_mode == "goals" else None
 
     upgrade_path = upgrade
 
