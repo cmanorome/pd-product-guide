@@ -91,6 +91,8 @@ _SKU_ROLE: dict[str, RoleType] = {
     "547": RoleType.VISUAL,
     "636": RoleType.SOIL_STRUCTURE,
     "29814": RoleType.UPTAKE,
+    "WMP": RoleType.BIOLOGY,
+    "WMB": RoleType.BIOLOGY,
     "1318": RoleType.BUNDLE,
     "1176": RoleType.BUNDLE,
     "1243": RoleType.BUNDLE,
@@ -107,7 +109,7 @@ _CHELATE_SKUS = frozenset({"547"})
 _HIGH_N_SKUS = frozenset({"MG", "A8X"})
 # Labels: do not tank-mix with iron. Stimulizer is explicitly mixable with iron.
 _IRON_INCOMPATIBLE_SKUS = frozenset(
-    {"SWS", "29782", "29800", "414", "513", "526", "29814", "NSWL", "664", "A8X", "A8M"}
+    {"SWS", "29782", "29800", "414", "513", "526", "29814", "NSWL", "664", "A8X", "A8M", "WMB"}
 )
 _GYPSUM_SKUS = frozenset({"1075", "636"})
 _WETTER_SKUS = frozenset({"664", "NSWL"})
@@ -144,7 +146,7 @@ def _infer_role_type(
         blob, "ph"
     ):
         return RoleType.SOIL_CHEMISTRY
-    if any(k in blob for k in ["seaweed", "kelp", "ascophyllum"]):
+    if any(k in blob for k in ["seaweed", "kelp", "ascophyllum", "worm casting", "vermicast", "compost tea"]):
         return RoleType.BIOLOGY
     if any(k in blob for k in ["fulvic", "humic", "humate", "stimulizer"]):
         return RoleType.UPTAKE
@@ -259,7 +261,7 @@ def load_products_from_template_csv(path: str | Path) -> list[Product]:
                 role_type == RoleType.SOIL_STRUCTURE or is_gypsum or is_wetter or ("zeolite" in blob)
             )
             improves_biology = role_type == RoleType.BIOLOGY or any(
-                k in blob for k in ["seaweed", "kelp", "inocul", "microb"]
+                k in blob for k in ["seaweed", "kelp", "inocul", "microb", "worm", "castings", "vermic"]
             )
             improves_uptake = role_type == RoleType.UPTAKE or any(
                 k in blob for k in ["fulvic", "humic", "chelat"]

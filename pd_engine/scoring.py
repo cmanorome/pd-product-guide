@@ -243,6 +243,21 @@ def score_product(product: Product, user: UserInput, *, weights: Weights) -> Sco
                 targeted_bonus += 0.35
             if weak >= 0.35 and poor_flowering < 0.35 and product.is_garden_reproductive:
                 targeted_bonus -= 0.45
+        low_om = float(user.soils.get("low_organic_matter", 0.0))
+        sandy = float(user.soils.get("sandy", 0.0))
+        lockout = float(user.problems.get("nutrient_lockout", 0.0))
+        if product.id == "WMP":
+            if low_om >= 0.35:
+                targeted_bonus += 0.70
+            elif sandy >= 0.35:
+                targeted_bonus += 0.45
+            if weak >= 0.35:
+                targeted_bonus += 0.25
+        if product.id == "WMB":
+            if weak >= 0.35:
+                targeted_bonus += 0.50
+            if lockout >= 0.35:
+                targeted_bonus += 0.20
 
     stage_alignment_bonus = 0.0
     stage_note: str | None = None

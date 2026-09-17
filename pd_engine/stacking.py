@@ -50,11 +50,15 @@ def _first_eligible(scored: list[ScoredProduct], role: RoleType, stack: list[Pro
             continue
         if any(p.id == sp.product.id for p in stack):
             continue
-        # Prefer seaweed over neem as the default biology layer unless disease/pest is in play.
-        if role == RoleType.BIOLOGY and sp.product.id == "758":
-            fungal = float(user.problems.get("fungal_issues", 0.0)) >= 0.35
-            pest_goal = float(user.goal_weights.get("pest_and_disease_resilience", 0.0)) >= 0.35
-            if not fungal and not pest_goal:
+        # Prefer seaweed as the default biology layer.
+        # Neem only when disease/pest is in play. Worm Magic is added later for tired soils.
+        if role == RoleType.BIOLOGY and sp.product.id in ("758", "WMP", "WMB"):
+            if sp.product.id == "758":
+                fungal = float(user.problems.get("fungal_issues", 0.0)) >= 0.35
+                pest_goal = float(user.goal_weights.get("pest_and_disease_resilience", 0.0)) >= 0.35
+                if not fungal and not pest_goal:
+                    continue
+            else:
                 continue
         res = incompatible_with_stack(sp.product, stack, user)
         if not res.ok:
@@ -89,13 +93,72 @@ def _pick_from_role(scored: list[ScoredProduct], role: RoleType, stack: list[Pro
 def _finish_plan(stack: list[Product], notes: list[str]) -> StackPlan:
     if iron_humic_spacing_needed(stack):
         notes.append(
-            "Apply liquid iron on a different day from seaweed, humic, or soil wetter — do not mix them in the same sprayer."
+            "Apply liquid iron on a different day from seaweed, humic, compost tea, or soil wetter — do not mix them in the same sprayer."
         )
     primary = stack[0]
     rest = stack[1:]
     role_rank = {r: i for i, r in enumerate(ROLE_ORDER)}
     rest_sorted = sorted(rest, key=lambda p: role_rank.get(p.role_type, 999))
     return StackPlan(primary=primary, stack=[primary] + rest_sorted, notes=notes)
+
+
+def _worm_magic_sku(user: UserInput) -> str | None:
+    """Pellets for tired/sandy soil; tea for weak roots / transplant. Seaweed stays the default biology pick."""
+    low_om = float(user.soils.get("low_organic_matter", 0.0)) >= 0.35
+    sandy = float(user.soils.get("sandy", 0.0)) >= 0.35
+    weak = float(user.problems.get("weak_roots", 0.0)) >= 0.35
+    fertility = float(user.goal_weights.get("improved_soil_fertility", 0.0)) >= 0.35
+    roots_goal = float(user.goal_weights.get("root_development_transplant", 0.0)) >= 0.35
+    if low_om or sandy or fertility:
+        return "WMP"
+    if weak or roots_goal:
+        return "WMB"
+    return None
+
+
+def _with_worm_magic(
+    stack: list[Product],
+    scored: list[ScoredProduct],
+    user: UserInput,
+    cap: int,
+) -> list[Product]:
+    if any(p.id in ("WMP", "WMB") for p in stack):
+        return stack
+    sku = _worm_magic_sku(user)
+    if not sku or len(stack) >= cap:
+        return stack
+    if sku == "WMB" and any(p.is_iron_based for p in stack):
+        sku = "WMP"
+    chosen: Product | None = None
+    for sp in scored:
+        if sp.product.id == sku:
+            chosen = sp.product
+            break
+    if chosen is None:
+        return stack
+    if not incompatible_with_stack(chosen, stack, user).ok:
+        if sku == "WMB":
+            for sp in scored:
+                if sp.product.id == "WMP" and incompatible_with_stack(sp.product, stack, user).ok:
+                    return stack + [sp.product]
+        return stack
+    return stack + [chosen]
+
+
+def _ensure_core_seaweed(
+    stack: list[Product],
+    scored: list[ScoredProduct],
+    user: UserInput,
+    cap: int,
+) -> list[Product]:
+    if any(p.id == "SWS" for p in stack) or len(stack) >= cap:
+        return stack
+    if not any(p.id in ("WMP", "WMB") for p in stack):
+        return stack
+    for sp in scored:
+        if sp.product.id == "SWS" and incompatible_with_stack(sp.product, stack, user).ok:
+            return stack + [sp.product]
+    return stack
 
 
 def _pick_primary_from(scored: list[ScoredProduct], user: UserInput, *, skip_nutrition: bool = False) -> Product | None:
@@ -164,6 +227,8 @@ def build_stack(scored: list[ScoredProduct], user: UserInput, *, max_stack: int 
         if picked is not None:
             stack.append(picked)
 
+    stack = _with_worm_magic(stack, scored, user, cap)
+    stack = _ensure_core_seaweed(stack, scored, user, cap)
     return _finish_plan(stack, notes)
 
 
@@ -220,6 +285,8 @@ def build_stack_goals(scored: list[ScoredProduct], user: UserInput, *, max_stack
         if picked is not None:
             stack.append(picked)
 
+    stack = _with_worm_magic(stack, scored, user, cap)
+    stack = _ensure_core_seaweed(stack, scored, user, cap)
     return _finish_plan(stack, notes)
 
 
