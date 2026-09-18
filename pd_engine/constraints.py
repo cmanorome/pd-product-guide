@@ -39,6 +39,19 @@ def is_farmish(user: UserInput) -> bool:
     return user.use_case == "farms" or user.goal_vertical == "farm"
 
 
+def wants_garden_flowering(user: UserInput) -> bool:
+    if not is_gardenish(user):
+        return False
+    return (
+        _on(user, user.problems, "poor_flowering")
+        or float(user.goal_weights.get("strong_flowering_and_fruiting", 0.0)) >= 0.35
+    )
+
+
+def wants_lawn_deep_green(user: UserInput) -> bool:
+    return is_lawnish(user) and float(user.goal_weights.get("deep_green_colour", 0.0)) >= 0.35
+
+
 def product_fits_context(product: Product, user: UserInput) -> ConstraintResult:
     """Soft agronomic fit — skip products that don't match the selected situation."""
     lawnish = is_lawnish(user)
@@ -200,7 +213,13 @@ def role_is_warranted(role: RoleType, user: UserInput) -> bool:
             or _on(user, user.problems, "poor_flowering")
         )
     if role == RoleType.VISUAL:
-        return _on(user, user.problems, "yellowing")
+        if _on(user, user.problems, "yellowing"):
+            return True
+        return (
+            user.recommendation_mode == "goals"
+            and is_lawnish(user)
+            and float(user.goal_weights.get("deep_green_colour", 0.0)) >= 0.35
+        )
     return True
 
 
@@ -211,4 +230,7 @@ def recommended_max_stack(user: UserInput, default: int = 4) -> int:
         or _on(user, user.problems, "compaction")
         or _on(user, user.soils, "hydrophobic")
     )
-    return 5 if lockout and structure else default
+    base = 5 if lockout and structure else default
+    if wants_garden_flowering(user) or wants_lawn_deep_green(user):
+        return max(base, 5)
+    return base

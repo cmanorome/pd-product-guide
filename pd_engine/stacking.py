@@ -10,6 +10,8 @@ from .constraints import (
     product_fits_context,
     recommended_max_stack,
     role_is_warranted,
+    wants_garden_flowering,
+    wants_lawn_deep_green,
 )
 from .types import Product, RoleType, ScoredProduct, UserInput
 
@@ -25,6 +27,8 @@ ROLE_ORDER: list[RoleType] = [
 
 # If a Lawn Lovers core SKU is close to the role leader, prefer it.
 _CORE_PICK_RATIO = 0.85
+_FFR_LIQUID = "721"
+_ACTIV8 = ("A8M", "A8X")
 
 
 @dataclass(frozen=True)
@@ -164,6 +168,111 @@ def _ensure_core_seaweed(
     return stack
 
 
+def _product_by_id(scored: list[ScoredProduct], sku: str) -> Product | None:
+    for sp in scored:
+        if sp.product.id == sku:
+            return sp.product
+    return None
+
+
+def _make_room(stack: list[Product], cap: int, keep: set[str]) -> list[Product]:
+    if len(stack) < cap:
+        return stack
+    out = list(stack)
+    for i in range(len(out) - 1, 0, -1):
+        if out[i].id not in keep:
+            out.pop(i)
+            if len(out) < cap:
+                return out
+    return out
+
+
+def _append_sku(
+    stack: list[Product],
+    scored: list[ScoredProduct],
+    user: UserInput,
+    sku: str,
+    cap: int,
+    keep: set[str],
+) -> list[Product]:
+    if any(p.id == sku for p in stack):
+        return stack
+    prod = _product_by_id(scored, sku)
+    if prod is None or not product_fits_context(prod, user).ok:
+        return stack
+    stack = list(stack)
+    keep = set(keep)
+    keep.add(stack[0].id)
+    keep.add(sku)
+    if len(stack) >= cap:
+        stack = _make_room(stack, cap, keep)
+    if len(stack) >= cap:
+        return stack
+    return stack + [prod]
+
+
+def _with_garden_flower_feed(
+    stack: list[Product],
+    scored: list[ScoredProduct],
+    user: UserInput,
+    cap: int,
+    notes: list[str],
+) -> list[Product]:
+    if not wants_garden_flowering(user):
+        return stack
+    keep = {stack[0].id, _FFR_LIQUID, *_ACTIV8, "SWS", "STM"}
+    stack = _append_sku(stack, scored, user, _FFR_LIQUID, cap, keep)
+    has_ffr = any(p.id in (_FFR_LIQUID, "575") for p in stack)
+    has_a8 = any(p.id in _ACTIV8 for p in stack)
+    if has_ffr and not has_a8:
+        stack = _append_sku(stack, scored, user, "A8M", cap, keep)
+        if not any(p.id in _ACTIV8 for p in stack):
+            stack = _append_sku(stack, scored, user, "A8X", cap, keep)
+    a8 = next((p for p in stack if p.id in _ACTIV8), None)
+    if any(p.id == _FFR_LIQUID for p in stack) and a8 is not None:
+        a8_label = "Activ8EXTRA" if a8.id == "A8X" else "Activ8Mate"
+        notes.append(
+            f"Alternate between Flowers, Fruits & Roots and {a8_label} each feed. "
+            "FFR is for flowering/fruiting; Activ8 is the regular feed. Do not mix those two in the same sprayer. "
+            "Seaweed or Stimulizer can mix with that day's feed."
+        )
+    return stack
+
+
+def _with_lawn_iron(
+    stack: list[Product],
+    scored: list[ScoredProduct],
+    user: UserInput,
+    cap: int,
+) -> list[Product]:
+    if not wants_lawn_deep_green(user):
+        return stack
+    if any(p.is_iron_based or p.id == "LEN" for p in stack):
+        return stack
+    keep = {stack[0].id, "SWS", "LIR", "STM", "A8X"}
+    return _append_sku(stack, scored, user, "LIR", cap, keep)
+
+
+def _with_humate_note(stack: list[Product], notes: list[str]) -> None:
+    if any(p.id == "513" for p in stack):
+        notes.append(
+            "Spread Humate granules on the top layer of soil, under mulch, or dug in. They do not need to be watered in."
+        )
+
+
+def _apply_calendar_stack_rules(
+    stack: list[Product],
+    scored: list[ScoredProduct],
+    user: UserInput,
+    cap: int,
+    notes: list[str],
+) -> list[Product]:
+    stack = _with_garden_flower_feed(stack, scored, user, cap, notes)
+    stack = _with_lawn_iron(stack, scored, user, cap)
+    _with_humate_note(stack, notes)
+    return stack
+
+
 def _pick_primary_from(scored: list[ScoredProduct], user: UserInput, *, skip_nutrition: bool = False) -> Product | None:
     first: ScoredProduct | None = None
     core: ScoredProduct | None = None
@@ -232,6 +341,7 @@ def build_stack(scored: list[ScoredProduct], user: UserInput, *, max_stack: int 
 
     stack = _with_worm_magic(stack, scored, user, cap)
     stack = _ensure_core_seaweed(stack, scored, user, cap)
+    stack = _apply_calendar_stack_rules(stack, scored, user, cap, notes)
     return _finish_plan(stack, notes)
 
 
@@ -251,6 +361,10 @@ def _garden_feed_should_lead(user: UserInput) -> bool:
 
 def _pick_goals_foundation_primary(scored: list[ScoredProduct], user: UserInput) -> tuple[Product, list[str]]:
     notes: list[str] = []
+    if wants_garden_flowering(user):
+        for sp in scored:
+            if sp.product.id == _FFR_LIQUID and is_valid_primary(sp.product, user).ok:
+                return sp.product, notes
     if _garden_feed_should_lead(user):
         for sp in scored:
             if sp.product.role_type != RoleType.NUTRITION:
@@ -290,6 +404,7 @@ def build_stack_goals(scored: list[ScoredProduct], user: UserInput, *, max_stack
 
     stack = _with_worm_magic(stack, scored, user, cap)
     stack = _ensure_core_seaweed(stack, scored, user, cap)
+    stack = _apply_calendar_stack_rules(stack, scored, user, cap, notes)
     return _finish_plan(stack, notes)
 
 

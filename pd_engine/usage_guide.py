@@ -46,6 +46,8 @@ def _mix_note(row: dict[str, str]) -> str | None:
     bits: list[str] = []
     if sku == "NSWL":
         bits.append("Mix gently — do not shake.")
+    if sku == "513":
+        bits.append("Spread on the top of soil, under mulch, or dug in. Does not need to be watered in.")
     if sku == "STM":
         bits.append("This is the liquid that can be mixed with iron.")
     elif sku in ("LIR", "MG"):
@@ -61,7 +63,7 @@ def _mix_note(row: dict[str, str]) -> str | None:
     if sku in ("547", "846", "LIR", "MG", "LEN"):
         bits.append("May stain paths and clothes.")
     if sku in ("886", "892"):
-        bits.append("Do not spread in heat over 30°C. Half rate in autumn and winter.")
+        bits.append("Do not spread in heat over 30°C.")
     if _truthy(row.get("jar_test")) and sku not in ("NSWL",):
         bits.append("Jar test before mixing with other products.")
     if not bits:

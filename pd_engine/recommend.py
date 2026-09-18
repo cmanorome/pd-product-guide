@@ -15,7 +15,7 @@ from .champion_turf import (
     GREENS_TAG,
     champion_turf_pair_warranted,
 )
-from .constraints import is_lawnish, product_fits_context, recommended_max_stack
+from .constraints import is_lawnish, product_fits_context, recommended_max_stack, wants_garden_flowering
 from .goal_layer import effective_goal_weights
 from .intent import build_user_input
 from .scoring import Weights, score_product, sort_scored
@@ -65,7 +65,7 @@ _ROLE_JOB = {
     RoleType.BIOLOGY: "to support soil biology so plants use the rest of the program",
     RoleType.UPTAKE: "to help unlock and carry nutrients",
     RoleType.NUTRITION: "to feed growth",
-    RoleType.VISUAL: "to restore colour where leaves or turf have yellowed",
+    RoleType.VISUAL: "to deepen colour and help with yellowing",
     RoleType.SOIL_STRUCTURE: "to improve how the soil holds and moves water",
     RoleType.SOIL_CHEMISTRY: "to adjust soil pH so nutrients stay available",
     RoleType.BUNDLE: "as a one-pack option covering several steps",
@@ -219,6 +219,12 @@ def _goals_primary_fertiliser(scored_sorted: list[ScoredProduct], user: UserInpu
     """Highest-scored NUTRITION product for goals mode (explicit fertiliser line in UI)."""
     if user.recommendation_mode != "goals":
         return None
+    # Flowering/fruiting: Activ8 is the regular feed; FFR liquid is the flowering product.
+    if wants_garden_flowering(user):
+        for sku in ("A8M", "A8X"):
+            for sp in scored_sorted:
+                if sp.product.id == sku and product_fits_context(sp.product, user).ok:
+                    return sp.product
     # Planting stage: Roots, Shoots & Leaves is the vegetative feed.
     if (
         user.intent == "establishment_mode"
