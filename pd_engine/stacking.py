@@ -260,6 +260,14 @@ def _with_humate_note(stack: list[Product], notes: list[str]) -> None:
         )
 
 
+def _with_garden_natives_note(user: UserInput, notes: list[str]) -> None:
+    if not is_gardenish(user):
+        return
+    notes.append(
+        "For natives and other sensitive plants, use Seaweed Secrets and Activ8Mate at half strength."
+    )
+
+
 def _apply_calendar_stack_rules(
     stack: list[Product],
     scored: list[ScoredProduct],
@@ -269,6 +277,7 @@ def _apply_calendar_stack_rules(
 ) -> list[Product]:
     stack = _with_garden_flower_feed(stack, scored, user, cap, notes)
     stack = _with_lawn_iron(stack, scored, user, cap)
+    _with_garden_natives_note(user, notes)
     _with_humate_note(stack, notes)
     return stack
 
