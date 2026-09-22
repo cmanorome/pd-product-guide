@@ -268,6 +268,14 @@ def _with_garden_natives_note(user: UserInput, notes: list[str]) -> None:
     )
 
 
+def _with_fungal_note(user: UserInput, notes: list[str]) -> None:
+    if float(user.problems.get("fungal_issues", 0.0)) < 0.35:
+        return
+    notes.append(
+        "This plan does not include chemical fungicides. We support plant and soil health so lawns and gardens can resist disease, and we ease high-nitrogen feeds in summer."
+    )
+
+
 def _apply_calendar_stack_rules(
     stack: list[Product],
     scored: list[ScoredProduct],
@@ -278,6 +286,7 @@ def _apply_calendar_stack_rules(
     stack = _with_garden_flower_feed(stack, scored, user, cap, notes)
     stack = _with_lawn_iron(stack, scored, user, cap)
     _with_garden_natives_note(user, notes)
+    _with_fungal_note(user, notes)
     _with_humate_note(stack, notes)
     return stack
 
