@@ -133,8 +133,23 @@ async def home() -> str:
       :root { --green: #22B14C; --green-dark: #14532d; --ink: #111827; --muted: #6b7280; --line: #e5e7eb; --bg: #f6f7f8; }
       * { box-sizing: border-box; }
       body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; background: var(--bg); color: var(--ink); }
-      .container { max-width: 820px; margin: 24px auto; padding: 0 16px 48px; }
-      h2 { font-size: 22px; }
+      .header {
+        background: var(--green);
+        color: #f0fdfa;
+        padding: 32px 0 24px;
+        margin-bottom: 22px;
+      }
+      .container { max-width: 820px; margin: 0 auto; padding: 0 16px; }
+      main.container { padding-bottom: 48px; }
+      .eyebrow {
+        text-transform: uppercase;
+        letter-spacing: 0.12em;
+        font-size: 11px;
+        margin: 0 0 8px;
+        opacity: 0.95;
+      }
+      h1 { margin: 0 0 8px; font-size: clamp(26px, 4vw, 34px); }
+      .subtitle { margin: 0; color: #dcfce7; max-width: 720px; }
       h3 { font-size: 16px; margin: 22px 0 10px; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
       .card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: white; }
@@ -269,11 +284,14 @@ async def home() -> str:
     </style>
   </head>
   <body>
-    <div class="container">
-      <div style="display:flex; gap:12px; align-items:baseline; justify-content:space-between; flex-wrap:wrap;">
-        <h2 style="margin:0;">Plant Doctor Product Guide</h2>
+    <header class="header">
+      <div class="container">
+        <p class="eyebrow">Plant Doctor</p>
+        <h1>Product Guide</h1>
+        <p class="subtitle">Tell us what’s going on. We’ll suggest what to use first, then what to add.</p>
       </div>
-      <p class="muted">Tell us what’s going on. We’ll suggest what to use first, then what to add.</p>
+    </header>
+    <main class="container">
 
     <div class="ask card">
       <section class="ask-step">
@@ -862,7 +880,7 @@ async def home() -> str:
         document.getElementById("friendly").innerHTML = `<div class="empty">Fill in the form and tap Get recommendation.</div>`;
       });
     </script>
-    </div>
+    </main>
   </body>
 </html>
 """
