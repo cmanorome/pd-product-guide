@@ -130,7 +130,8 @@ async def home() -> str:
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Plant Doctor Product Guide</title>
     <style>
-      :root { --green: #22B14C; --ink: #111827; --muted: #6b7280; --line: #e5e7eb; --bg: #f6f7f8; }
+      :root { --green: #22B14C; --green-dark: #14532d; --ink: #111827; --muted: #6b7280; --line: #e5e7eb; --bg: #f6f7f8; }
+      * { box-sizing: border-box; }
       body { font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; margin: 0; background: var(--bg); color: var(--ink); }
       .container { max-width: 820px; margin: 24px auto; padding: 0 16px 48px; }
       h2 { font-size: 22px; }
@@ -139,18 +140,72 @@ async def home() -> str:
       .card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: white; }
       .card h4 { margin: 0 0 8px 0; font-size: 14px; }
       label { display:block; font-size: 12px; color:#374151; margin-bottom: 4px; }
-      input, select { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; box-sizing: border-box; }
-      .check { display:flex; gap:10px; align-items:flex-start; }
-      .check input { width:auto; margin-top: 3px; }
-      .check .txt { flex:1; }
-      .check .txt .title { font-weight: 600; font-size: 14px; }
-      .check .txt .desc { font-size: 12px; color: var(--muted); margin-top: 2px; }
+      input, select { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
       button { padding: 10px 16px; border: 0; border-radius: 10px; background: var(--green); color: white; cursor:pointer; font-weight: 600; }
       button.secondary { background: white; color: var(--ink); border: 1px solid var(--line); font-weight: 500; }
       button:disabled { opacity: 0.65; cursor: default; }
       .muted { color: var(--muted); font-size: 13px; line-height: 1.45; }
       .hidden { display: none !important; }
-      .mode-card { margin-bottom: 14px; }
+      .ask.card {
+        display: flex;
+        flex-direction: column;
+        gap: 18px;
+        padding: 18px 20px 20px;
+        counter-reset: ask;
+      }
+      .ask-step {
+        display: grid;
+        grid-template-columns: 28px minmax(0, 1fr);
+        gap: 10px 14px;
+        align-items: start;
+        counter-increment: ask;
+      }
+      .ask-num {
+        width: 28px;
+        height: 28px;
+        border-radius: 99px;
+        background: var(--green-dark);
+        color: #fff;
+        font-size: 13px;
+        font-weight: 700;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        margin-top: 2px;
+      }
+      .ask-num::before { content: counter(ask); }
+      .ask-step h3 { margin: 4px 0 8px; }
+      .ask-step > div > label { margin-bottom: 8px; }
+      .ask-step .muted { margin: 0 0 10px; }
+      .ask-fields {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
+        gap: 10px 12px;
+      }
+      .check-grid {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 8px;
+      }
+      .check-item {
+        display: flex;
+        gap: 10px;
+        align-items: flex-start;
+        margin: 0;
+        padding: 10px 12px;
+        border: 1px solid var(--line);
+        border-radius: 10px;
+        background: #fafafa;
+        cursor: pointer;
+      }
+      .check-item:has(input:checked) {
+        border-color: var(--green);
+        background: #f0faf3;
+      }
+      .check-item input { width: auto; margin: 0; margin-top: 2px; }
+      .check-item .title { display: block; font-weight: 600; font-size: 14px; line-height: 1.3; }
+      .check-item .desc { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
+      .ask .fold { margin-top: 10px; }
       .mode-row { display: flex; flex-wrap: wrap; gap: 10px; }
       .mode-row label {
         display: flex; gap: 8px; align-items: center; cursor: pointer;
@@ -220,165 +275,153 @@ async def home() -> str:
       </div>
       <p class="muted">Tell us what’s going on. We’ll suggest what to use first, then what to add.</p>
 
-    <div class="card mode-card">
-      <label style="margin-bottom:8px;">I want to</label>
-      <div class="mode-row">
-        <label><input type="radio" name="rec_mode" value="problems" checked /><span>Fix a problem</span></label>
-        <label><input type="radio" name="rec_mode" value="goals" /><span>Improve results</span></label>
-      </div>
-    </div>
+    <div class="ask card">
+      <section class="ask-step">
+        <span class="ask-num"></span>
+        <div>
+          <label>I want to</label>
+          <div class="mode-row">
+            <label><input type="radio" name="rec_mode" value="problems" checked /><span>Fix a problem</span></label>
+            <label><input type="radio" name="rec_mode" value="goals" /><span>Improve results</span></label>
+          </div>
+        </div>
+      </section>
 
-    <div class="grid">
-      <div class="card" id="card_intent">
-        <label>Stage</label>
-        <select id="intent">
-          <option value="establishment_mode">Just planting / establishing</option>
-          <option value="maintenance_mode" selected>Keep it healthy</option>
-          <option value="performance_mode">Push for best results</option>
-        </select>
-      </div>
-      <div class="card">
-        <label>Season</label>
-        <select id="season">
-          <option value="unknown">Unknown</option>
-          <option value="spring">Spring</option>
-          <option value="summer">Summer</option>
-          <option value="autumn">Autumn</option>
-          <option value="winter">Winter</option>
-        </select>
-      </div>
-      <div class="card hidden" id="card_goal_vertical">
-        <label>Goal area</label>
-        <select id="goal_vertical">
-          <option value="lawn">Lawn goals</option>
-          <option value="garden">Garden goals</option>
-          <option value="farm">Farm goals</option>
-        </select>
-      </div>
-      <div class="card" id="card_use_case">
-        <label>Where are you using it?</label>
-        <select id="use_case">
-          <option value="">Not sure</option>
-          <option value="lawn">Lawn</option>
-          <option value="garden_beds">Garden (beds, veg, flowers, pots)</option>
-        </select>
-      </div>
-      <div class="card">
-        <label>How sure are you?</label>
-        <select id="confidence_level">
-          <option value="not_sure">Not sure</option>
-          <option value="somewhat_sure" selected>Somewhat sure</option>
-          <option value="very_sure">Very sure</option>
-        </select>
-      </div>
-    </div>
+      <section class="ask-step">
+        <span class="ask-num"></span>
+        <div>
+          <div class="ask-fields">
+            <div id="card_intent">
+              <label for="intent">Stage</label>
+              <select id="intent">
+                <option value="establishment_mode">Just planting / establishing</option>
+                <option value="maintenance_mode" selected>Keep it healthy</option>
+                <option value="performance_mode">Push for best results</option>
+              </select>
+            </div>
+            <div>
+              <label for="season">Season</label>
+              <select id="season">
+                <option value="unknown">Unknown</option>
+                <option value="spring">Spring</option>
+                <option value="summer">Summer</option>
+                <option value="autumn">Autumn</option>
+                <option value="winter">Winter</option>
+              </select>
+            </div>
+            <div class="hidden" id="card_goal_vertical">
+              <label for="goal_vertical">Goal area</label>
+              <select id="goal_vertical">
+                <option value="lawn">Lawn goals</option>
+                <option value="garden">Garden goals</option>
+                <option value="farm">Farm goals</option>
+              </select>
+            </div>
+            <div id="card_use_case">
+              <label for="use_case">Where are you using it?</label>
+              <select id="use_case">
+                <option value="">Not sure</option>
+                <option value="lawn">Lawn</option>
+                <option value="garden_beds">Garden (beds, veg, flowers, pots)</option>
+              </select>
+            </div>
+            <div>
+              <label for="confidence_level">How sure are you?</label>
+              <select id="confidence_level">
+                <option value="not_sure">Not sure</option>
+                <option value="somewhat_sure" selected>Somewhat sure</option>
+                <option value="very_sure">Very sure</option>
+              </select>
+            </div>
+          </div>
+        </div>
+      </section>
 
-    <div id="section_goals" class="hidden">
-      <h3>What do you want?</h3>
-      <p class="muted">Tick one or more. These change with where you’re using it.</p>
-      <div id="goals_need_place" class="tip hidden">Choose where you’re using it above, and we’ll show lawn or garden goals.</div>
-      <div id="goal_panel_lawn" class="grid hidden">
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="deep_green_colour"/><div class="txt"><div class="title">Deep green colour</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="thickening_and_density"/><div class="txt"><div class="title">Thickening and density</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="fast_recovery_from_stress"/><div class="txt"><div class="title">Fast recovery from stress</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="weed_suppression_through_dominance"/><div class="txt"><div class="title">Weed suppression through dominance</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="low_maintenance_resilience"/><div class="txt"><div class="title">Low maintenance resilience</div></div></div></div>
-      </div>
-      <div id="goal_panel_garden" class="grid hidden">
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="strong_flowering_and_fruiting"/><div class="txt"><div class="title">More flowers, fruit and veg</div><div class="desc">Blooms, cropping, and productive plants.</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="improved_soil_fertility"/><div class="txt"><div class="title">Richer soil over time</div><div class="desc">Biology, structure, and nutrient holding.</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="root_development_transplant"/><div class="txt"><div class="title">Stronger roots and transplanting</div><div class="desc">New plantings, seedlings, and establishment.</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="pest_and_disease_resilience"/><div class="txt"><div class="title">Pest and disease resilience</div><div class="desc">Tougher plants under pressure.</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="consistent_growth_across_seasons"/><div class="txt"><div class="title">Steady growth through the year</div><div class="desc">Less boom-and-bust between seasons.</div></div></div></div>
-      </div>
-      <div id="goal_panel_farm" class="grid hidden">
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="yield_increase"/><div class="txt"><div class="title">Yield increase</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="soil_efficiency"/><div class="txt"><div class="title">Soil efficiency</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="water_efficiency"/><div class="txt"><div class="title">Water efficiency</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="crop_uniformity"/><div class="txt"><div class="title">Crop uniformity</div></div></div></div>
-        <div class="card"><div class="check"><input class="goal-cb" type="checkbox" data-goal-key="reduced_input_dependency"/><div class="txt"><div class="title">Reduced input dependency over time</div></div></div></div>
-      </div>
-    </div>
+      <section id="section_goals" class="ask-step hidden">
+        <span class="ask-num"></span>
+        <div>
+          <h3>What do you want?</h3>
+          <p class="muted">Tick one or more. These change with where you’re using it.</p>
+          <div id="goals_need_place" class="tip hidden">Choose where you’re using it above, and we’ll show lawn or garden goals.</div>
+          <div id="goal_panel_lawn" class="check-grid hidden">
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="deep_green_colour"/><span><span class="title">Deep green colour</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="thickening_and_density"/><span><span class="title">Thickening and density</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="fast_recovery_from_stress"/><span><span class="title">Fast recovery from stress</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="weed_suppression_through_dominance"/><span><span class="title">Weed suppression through dominance</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="low_maintenance_resilience"/><span><span class="title">Low maintenance resilience</span></span></label>
+          </div>
+          <div id="goal_panel_garden" class="check-grid hidden">
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="strong_flowering_and_fruiting"/><span><span class="title">More flowers, fruit and veg</span><span class="desc">Blooms, cropping, and productive plants.</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="improved_soil_fertility"/><span><span class="title">Richer soil over time</span><span class="desc">Biology, structure, and nutrient holding.</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="root_development_transplant"/><span><span class="title">Stronger roots and transplanting</span><span class="desc">New plantings, seedlings, and establishment.</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="pest_and_disease_resilience"/><span><span class="title">Pest and disease resilience</span><span class="desc">Tougher plants under pressure.</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="consistent_growth_across_seasons"/><span><span class="title">Steady growth through the year</span><span class="desc">Less boom-and-bust between seasons.</span></span></label>
+          </div>
+          <div id="goal_panel_farm" class="check-grid hidden">
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="yield_increase"/><span><span class="title">Yield increase</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="soil_efficiency"/><span><span class="title">Soil efficiency</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="water_efficiency"/><span><span class="title">Water efficiency</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="crop_uniformity"/><span><span class="title">Crop uniformity</span></span></label>
+            <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="reduced_input_dependency"/><span><span class="title">Reduced input dependency over time</span></span></label>
+          </div>
+        </div>
+      </section>
 
-    <div id="section_symptoms">
-    <h3>What’s wrong?</h3>
-    <div class="grid">
-      <div class="card">
-        <div class="check"><input id="yellowing" type="checkbox"/><div class="txt"><div class="title" id="yellowing_title">Yellowing</div><div class="desc" id="yellowing_desc">Pale lawn or yellow leaves on plants.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="slow_growth" type="checkbox"/><div class="txt"><div class="title" id="slow_growth_title">Slow growth</div><div class="desc" id="slow_growth_desc">Not filling out — lawn or plants.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="weak_roots" type="checkbox"/><div class="txt"><div class="title" id="weak_roots_title">Weak roots</div><div class="desc" id="weak_roots_desc">Pulls up easily, wilts in heat, or struggles after planting.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="nutrient_lockout" type="checkbox"/><div class="txt"><div class="title">Nutrient lockout</div><div class="desc">Fertilised but no response, symptoms persist.</div></div></div>
-      </div>
-      <div class="card" id="card_patchy_lawn">
-        <div class="check"><input id="patchy_lawn" type="checkbox"/><div class="txt"><div class="title">Patchy lawn</div><div class="desc">Uneven growth, thin areas.</div></div></div>
-      </div>
-      <div class="card" id="card_poor_flowering">
-        <div class="check"><input id="poor_flowering" type="checkbox"/><div class="txt"><div class="title">Poor flowering or fruiting</div><div class="desc">Few blooms, small fruit, or plants that won’t crop.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="compaction" type="checkbox"/><div class="txt"><div class="title">Compaction</div><div class="desc">Hard ground, poor drainage, poor root penetration.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="poor_water_retention" type="checkbox"/><div class="txt"><div class="title">Poor water retention</div><div class="desc">Dries quickly, needs frequent watering.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="fungal_issues" type="checkbox"/><div class="txt"><div class="title" id="fungal_title">Fungal issues</div><div class="desc" id="fungal_desc">Spots, mildew, circular patches, or disease pressure.</div></div></div>
-      </div>
-    </div>
-    </div>
+      <section id="section_symptoms" class="ask-step">
+        <span class="ask-num"></span>
+        <div>
+          <h3>What’s wrong?</h3>
+          <div class="check-grid">
+            <label class="check-item"><input id="yellowing" type="checkbox"/><span><span class="title" id="yellowing_title">Yellowing</span><span class="desc" id="yellowing_desc">Pale lawn or yellow leaves on plants.</span></span></label>
+            <label class="check-item"><input id="slow_growth" type="checkbox"/><span><span class="title" id="slow_growth_title">Slow growth</span><span class="desc" id="slow_growth_desc">Not filling out — lawn or plants.</span></span></label>
+            <label class="check-item"><input id="weak_roots" type="checkbox"/><span><span class="title" id="weak_roots_title">Weak roots</span><span class="desc" id="weak_roots_desc">Pulls up easily, wilts in heat, or struggles after planting.</span></span></label>
+            <label class="check-item"><input id="nutrient_lockout" type="checkbox"/><span><span class="title">Nutrient lockout</span><span class="desc">Fertilised but no response, symptoms persist.</span></span></label>
+            <label class="check-item" id="card_patchy_lawn"><input id="patchy_lawn" type="checkbox"/><span><span class="title">Patchy lawn</span><span class="desc">Uneven growth, thin areas.</span></span></label>
+            <label class="check-item" id="card_poor_flowering"><input id="poor_flowering" type="checkbox"/><span><span class="title">Poor flowering or fruiting</span><span class="desc">Few blooms, small fruit, or plants that won’t crop.</span></span></label>
+            <label class="check-item"><input id="compaction" type="checkbox"/><span><span class="title">Compaction</span><span class="desc">Hard ground, poor drainage, poor root penetration.</span></span></label>
+            <label class="check-item"><input id="poor_water_retention" type="checkbox"/><span><span class="title">Poor water retention</span><span class="desc">Dries quickly, needs frequent watering.</span></span></label>
+            <label class="check-item"><input id="fungal_issues" type="checkbox"/><span><span class="title" id="fungal_title">Fungal issues</span><span class="desc" id="fungal_desc">Spots, mildew, circular patches, or disease pressure.</span></span></label>
+          </div>
+        </div>
+      </section>
 
-    <div id="section_soil">
-    <h3>Soil</h3>
-    <div class="grid">
-      <div class="card">
-        <div class="check"><input id="sandy" type="checkbox"/><div class="txt"><div class="title">Sandy</div><div class="desc">Drains fast, nutrients leach.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="clay" type="checkbox"/><div class="txt"><div class="title">Clay</div><div class="desc">Heavy, holds water, compacts easily.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="acidic" type="checkbox"/><div class="txt"><div class="title">Acidic</div><div class="desc">Low pH. Skip if you enter a measured pH.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="alkaline" type="checkbox"/><div class="txt"><div class="title">Alkaline</div><div class="desc">High pH. Skip if you enter a measured pH.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="low_organic_matter" type="checkbox"/><div class="txt"><div class="title">Low organic matter</div><div class="desc">Poor soil life and nutrient buffering.</div></div></div>
-      </div>
-      <div class="card">
-        <div class="check"><input id="hydrophobic" type="checkbox"/><div class="txt"><div class="title">Hydrophobic (water repellent)</div><div class="desc">Water beads/runs off, dry patch.</div></div></div>
-      </div>
+      <section class="ask-step">
+        <span class="ask-num"></span>
+        <div>
+          <h3>Soil</h3>
+          <div class="check-grid">
+            <label class="check-item"><input id="sandy" type="checkbox"/><span><span class="title">Sandy</span><span class="desc">Drains fast, nutrients leach.</span></span></label>
+            <label class="check-item"><input id="clay" type="checkbox"/><span><span class="title">Clay</span><span class="desc">Heavy, holds water, compacts easily.</span></span></label>
+            <label class="check-item"><input id="acidic" type="checkbox"/><span><span class="title">Acidic</span><span class="desc">Low pH. Skip if you enter a measured pH.</span></span></label>
+            <label class="check-item"><input id="alkaline" type="checkbox"/><span><span class="title">Alkaline</span><span class="desc">High pH. Skip if you enter a measured pH.</span></span></label>
+            <label class="check-item"><input id="low_organic_matter" type="checkbox"/><span><span class="title">Low organic matter</span><span class="desc">Poor soil life and nutrient buffering.</span></span></label>
+            <label class="check-item"><input id="hydrophobic" type="checkbox"/><span><span class="title">Hydrophobic (water repellent)</span><span class="desc">Water beads/runs off, dry patch.</span></span></label>
+          </div>
+          <details class="fold" id="section_soil_test">
+            <summary>I have a soil test (optional)</summary>
+            <p class="muted">pH is the most useful number. Home kits are usually water pH; Australian labs are often CaCl₂.</p>
+            <div class="ask-fields">
+              <div>
+                <label for="soil_ph">Soil pH</label>
+                <input id="soil_ph" type="number" min="3.5" max="10.5" step="0.1" placeholder="e.g. 6.2" />
+                <div class="muted" style="margin-top:6px;" id="soil_ph_hint">Leave blank if you haven’t tested.</div>
+              </div>
+              <div>
+                <label for="soil_ph_method">Measured in</label>
+                <select id="soil_ph_method">
+                  <option value="water" selected>Water (home kit)</option>
+                  <option value="cacl2">CaCl₂ (lab report)</option>
+                </select>
+              </div>
+              <div>
+                <label for="organic_matter_pct">Organic matter %</label>
+                <input id="organic_matter_pct" type="number" min="0" max="20" step="0.1" placeholder="e.g. 1.8" />
+              </div>
+            </div>
+          </details>
+        </div>
+      </section>
     </div>
-    </div>
-
-    <details class="fold" id="section_soil_test">
-    <summary>I have a soil test (optional)</summary>
-    <p class="muted">pH is the most useful number. Home kits are usually water pH; Australian labs are often CaCl₂.</p>
-    <div class="grid">
-      <div>
-        <label for="soil_ph">Soil pH</label>
-        <input id="soil_ph" type="number" min="3.5" max="10.5" step="0.1" placeholder="e.g. 6.2" />
-        <div class="muted" style="margin-top:6px;" id="soil_ph_hint">Leave blank if you haven’t tested.</div>
-      </div>
-      <div>
-        <label for="soil_ph_method">Measured in</label>
-        <select id="soil_ph_method">
-          <option value="water" selected>Water (home kit)</option>
-          <option value="cacl2">CaCl₂ (lab report)</option>
-        </select>
-      </div>
-      <div>
-        <label for="organic_matter_pct">Organic matter %</label>
-        <input id="organic_matter_pct" type="number" min="0" max="20" step="0.1" placeholder="e.g. 1.8" />
-      </div>
-    </div>
-    </details>
 
     <div class="actions">
       <button id="run">Get recommendation</button>
