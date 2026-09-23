@@ -16,10 +16,10 @@ from .champion_turf import (
     champion_turf_pair_warranted,
 )
 from .constraints import is_lawnish, product_fits_context, recommended_max_stack, wants_garden_flowering
-from .goal_layer import effective_goal_weights
+from .goal_layer import effective_goal_weights, majority_keep_it_healthy_goals
 from .intent import build_user_input
 from .scoring import Weights, score_product, sort_scored
-from .stacking import build_stack, build_stack_goals
+from .stacking import build_stack, build_stack_goals, ensure_lawn_lovers_pro_pack
 from .types import Product, Recommendation, RoleType, UserInput, ScoredProduct
 
 
@@ -188,9 +188,11 @@ def _champion_turf_pair(
     user: UserInput,
     product_dict,
     scored_sorted: list[ScoredProduct],
+    *,
+    force: bool = False,
 ) -> dict[str, object] | None:
     """Surface both CHAMPION SKUs with tags only when scoring/goal weighting favours them vs the catalog."""
-    if not champion_turf_pair_warranted(user, scored_sorted):
+    if not force and not champion_turf_pair_warranted(user, scored_sorted):
         return None
     by_id = {p.id: p for p in catalog.products}
     fair = by_id.get(CHAMPION_FAIRWAY_ID)
@@ -264,6 +266,8 @@ def recommend(
     user: UserInput = build_user_input(raw_input)
     w = weights or Weights()
     cap = recommended_max_stack(user) if max_stack is None else max_stack
+    if majority_keep_it_healthy_goals(user) and is_lawnish(user):
+        cap = max(cap, 7)
 
     catalog = Catalog.from_csv(catalog_csv_path)
     scored = [score_product(p, user, weights=w) for p in catalog.products]
@@ -312,10 +316,17 @@ def recommend(
     non_bundle_scored = [sp for sp in scored_sorted if sp.product.role_type != RoleType.BUNDLE]
     if user.recommendation_mode == "goals":
         plan = build_stack_goals(non_bundle_scored or scored_sorted, user, max_stack=cap)
+        plan = ensure_lawn_lovers_pro_pack(plan, catalog.products, user)
     else:
         plan = build_stack(non_bundle_scored or scored_sorted, user, max_stack=cap)
 
-    champ = _champion_turf_pair(catalog, user, product_dict, scored_sorted)
+    champ = _champion_turf_pair(
+        catalog,
+        user,
+        product_dict,
+        scored_sorted,
+        force=majority_keep_it_healthy_goals(user) and is_lawnish(user),
+    )
     fert_primary = _goals_primary_fertiliser(scored_sorted, user) if user.recommendation_mode == "goals" else None
 
     upgrade_path = upgrade

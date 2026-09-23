@@ -2,10 +2,12 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
+from .catalog import LAWN_LOVERS_PRO_SKUS
 from .constraints import (
     incompatible_with_stack,
     iron_humic_spacing_needed,
     is_gardenish,
+    is_lawnish,
     is_valid_primary,
     product_fits_context,
     recommended_max_stack,
@@ -13,6 +15,7 @@ from .constraints import (
     wants_garden_flowering,
     wants_lawn_deep_green,
 )
+from .goal_layer import majority_keep_it_healthy_goals
 from .types import Product, RoleType, ScoredProduct, UserInput
 
 
@@ -29,6 +32,8 @@ ROLE_ORDER: list[RoleType] = [
 _CORE_PICK_RATIO = 0.85
 _FFR_LIQUID = "721"
 _ACTIV8 = ("A8M", "A8X")
+_QUANTUM_H = "29800"
+_SOIL_EXTRA_SKUS = frozenset({"1075", "636", "NSWL", "664", "LIMEGr", "DOL"})
 
 
 @dataclass(frozen=True)
@@ -91,6 +96,14 @@ def _pick_from_role(scored: list[ScoredProduct], role: RoleType, stack: list[Pro
     candidates = _first_eligible(scored, role, stack, user)
     if not candidates:
         return None
+    if (
+        majority_keep_it_healthy_goals(user)
+        and role == RoleType.UPTAKE
+        and not is_lawnish(user)
+    ):
+        quantum = next((sp for sp in candidates if sp.product.id == _QUANTUM_H), None)
+        if quantum is not None:
+            return quantum.product
     core = next((sp for sp in candidates if _preferred_core(sp.product, user)), None)
     if core is not None:
         return core.product
@@ -465,3 +478,70 @@ def ensure_goals_fertiliser(
     stack.append(chosen)
     notes.append("Goals mode: added a recommended fertiliser so the plan always includes nutrition.")
     return _finish_plan(stack, notes)
+
+
+def _is_iron_note(text: str) -> bool:
+    blob = (text or "").lower()
+    return "iron" in blob and "different day" in blob
+
+
+def _soil_extras_for_user(
+    catalog_products: list[Product],
+    user: UserInput,
+    already: set[str],
+) -> list[Product]:
+    by_id = {p.id: p for p in catalog_products}
+    extras: list[Product] = []
+    have = set(already)
+
+    def add(sku: str) -> None:
+        if sku in have:
+            return
+        prod = by_id.get(sku)
+        if prod is None or not product_fits_context(prod, user).ok:
+            return
+        extras.append(prod)
+        have.add(sku)
+
+    if float(user.soils.get("clay", 0.0)) >= 0.35:
+        add("1075")
+        if "1075" not in have:
+            add("636")
+    if float(user.soils.get("hydrophobic", 0.0)) >= 0.35:
+        add("NSWL")
+        if "NSWL" not in have:
+            add("664")
+    if float(user.soils.get("acidic", 0.0)) >= 0.35:
+        if not any(sku in have for sku in ("LIMEGr", "DOL")):
+            add("LIMEGr")
+            if "LIMEGr" not in have:
+                add("DOL")
+    return extras
+
+
+def ensure_lawn_lovers_pro_pack(
+    plan: StackPlan,
+    catalog_products: list[Product],
+    user: UserInput,
+) -> StackPlan:
+    """When most Keep it healthy goals are ticked on a lawn, use the full Pro Pack of 5."""
+    if not majority_keep_it_healthy_goals(user) or not is_lawnish(user):
+        return plan
+    by_id = {p.id: p for p in catalog_products}
+    pack = [by_id[sku] for sku in LAWN_LOVERS_PRO_SKUS if sku in by_id]
+    if not pack:
+        return plan
+    pack_ids = {p.id for p in pack}
+    extras = [p for p in plan.stack if p.id not in pack_ids and p.id in _SOIL_EXTRA_SKUS]
+    have = pack_ids | {p.id for p in extras}
+    extras = extras + _soil_extras_for_user(catalog_products, user, have)
+    notes = list(plan.notes)
+    notes.append(
+        "This keep-it-healthy plan uses the full Lawn Lovers Pro Pack: Seaweed Secrets, Activ8EXTRA, Quantum H, Liquid Iron, and Stimulizer — plus Champion granules as the slow-release lawn feed."
+    )
+    stack = pack + extras
+    if iron_humic_spacing_needed(stack) and not any(_is_iron_note(n) for n in notes):
+        notes.append(
+            "Apply liquid iron on a different day from seaweed, humic, compost tea, or soil wetter — do not mix them in the same sprayer."
+        )
+    return StackPlan(primary=pack[0], stack=stack, notes=notes)
