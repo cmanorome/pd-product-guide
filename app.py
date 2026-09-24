@@ -221,6 +221,17 @@ async def home() -> str:
       .check-item .title { display: block; font-weight: 600; font-size: 14px; line-height: 1.3; }
       .check-item .desc { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
       .ask .fold { margin-top: 10px; }
+      .ask.card.is-collapsed { gap: 0; padding: 14px 16px; }
+      .ask-summary {
+        display: flex;
+        align-items: center;
+        justify-content: space-between;
+        gap: 12px;
+        flex-wrap: wrap;
+      }
+      .ask-summary .kicker { margin: 0 0 2px; }
+      .ask-summary p { margin: 0; font-size: 14px; }
+      .ask-summary-actions { display: flex; gap: 8px; flex-wrap: wrap; }
       .mode-row { display: flex; flex-wrap: wrap; gap: 10px; }
       .mode-row label {
         display: flex; gap: 8px; align-items: center; cursor: pointer;
@@ -293,7 +304,18 @@ async def home() -> str:
     </header>
     <main class="container">
 
-    <div class="ask card">
+    <div class="ask card" id="ask_wrap">
+      <div id="ask_summary" class="ask-summary hidden">
+        <div>
+          <p class="kicker">Your answers</p>
+          <p id="ask_summary_text"></p>
+        </div>
+        <div class="ask-summary-actions">
+          <button type="button" id="edit_answers" class="secondary">Change answers</button>
+          <button type="button" id="reset_collapsed" class="secondary">Reset</button>
+        </div>
+      </div>
+      <div id="ask_panel">
       <section class="ask-step">
         <span class="ask-num"></span>
         <div>
@@ -439,9 +461,10 @@ async def home() -> str:
           </details>
         </div>
       </section>
+      </div>
     </div>
 
-    <div class="actions">
+    <div class="actions" id="actions">
       <button id="run">Get recommendation</button>
       <button id="reset" class="secondary" type="button">Reset</button>
     </div>
@@ -828,6 +851,49 @@ async def home() -> str:
         document.getElementById("friendly").innerHTML = html || `<div class="empty">No recommendation returned.</div>`;
       }
 
+      const intentLabels = {
+        establishment_mode: "Just planting",
+        maintenance_mode: "Keep it healthy",
+        performance_mode: "Best results",
+      };
+      const placeLabels = {
+        lawn: "Lawn",
+        garden_beds: "Garden",
+      };
+      function summarizeAnswers() {
+        const mode = document.querySelector('input[name="rec_mode"]:checked').value;
+        const uc = document.getElementById("use_case").value;
+        const season = document.getElementById("season").value;
+        const intent = document.getElementById("intent").value;
+        const parts = [
+          placeLabels[uc] || "Place not set",
+          mode === "goals" ? "Improve results" : "Fix a problem",
+        ];
+        if (mode === "goals" && intentLabels[intent]) parts.push(intentLabels[intent]);
+        if (season && season !== "unknown") {
+          parts.push(season.charAt(0).toUpperCase() + season.slice(1));
+        }
+        return parts.join(" · ");
+      }
+      function collapseQuestions() {
+        document.getElementById("ask_wrap").classList.add("is-collapsed");
+        document.getElementById("ask_panel").classList.add("hidden");
+        document.getElementById("ask_summary").classList.remove("hidden");
+        document.getElementById("ask_summary_text").textContent = summarizeAnswers();
+        document.getElementById("actions").classList.add("hidden");
+      }
+      function expandQuestions() {
+        document.getElementById("ask_wrap").classList.remove("is-collapsed");
+        document.getElementById("ask_panel").classList.remove("hidden");
+        document.getElementById("ask_summary").classList.add("hidden");
+        document.getElementById("ask_summary_text").textContent = "";
+        document.getElementById("actions").classList.remove("hidden");
+      }
+      document.getElementById("edit_answers").addEventListener("click", () => {
+        expandQuestions();
+        document.getElementById("ask_wrap").scrollIntoView({ behavior: "smooth", block: "start" });
+      });
+
       document.getElementById("run").addEventListener("click", async () => {
         const btn = document.getElementById("run");
         btn.disabled = true;
@@ -840,6 +906,7 @@ async def home() -> str:
           });
           const data = await res.json();
           renderFriendly(data);
+          collapseQuestions();
           document.getElementById("results_heading").scrollIntoView({ behavior: "smooth", block: "start" });
         } catch (err) {
           document.getElementById("friendly").innerHTML = `<div class="empty">Couldn’t get a recommendation. Try again.</div>`;
@@ -849,7 +916,7 @@ async def home() -> str:
         }
       });
 
-      document.getElementById("reset").addEventListener("click", () => {
+      function resetForm() {
         // dropdown defaults
         document.getElementById("intent").value = "maintenance_mode";
         document.getElementById("season").value = "unknown";
@@ -877,8 +944,11 @@ async def home() -> str:
         syncGoalPanels();
 
         // outputs
+        expandQuestions();
         document.getElementById("friendly").innerHTML = `<div class="empty">Fill in the form and tap Get recommendation.</div>`;
-      });
+      }
+      document.getElementById("reset").addEventListener("click", resetForm);
+      document.getElementById("reset_collapsed").addEventListener("click", resetForm);
     </script>
     </main>
   </body>
