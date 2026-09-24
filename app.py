@@ -250,17 +250,36 @@ async def home() -> str:
       .results { display: flex; flex-direction: column; gap: 14px; margin-top: 8px; }
       .kicker { font-size: 11px; letter-spacing: 0.04em; text-transform: uppercase; color: var(--muted); font-weight: 700; margin: 0 0 6px; }
       .hero { background: white; border: 1px solid var(--line); border-radius: 14px; padding: 16px; }
-      .hero-main { display: flex; gap: 14px; align-items: flex-start; }
       .hero img, .row-card img { width: 72px; height: 72px; object-fit: cover; border-radius: 10px; border: 1px solid var(--line); background: #fff; }
       .row-card img { width: 52px; height: 52px; }
-      .prod-name { font-size: 16px; font-weight: 700; margin: 0 0 4px; }
+      .prod, .row-card {
+        display: grid;
+        grid-template-columns: auto minmax(0, 1fr);
+        column-gap: 14px;
+        row-gap: 8px;
+        align-items: start;
+      }
+      .prod > img, .row-card > img { grid-column: 1; grid-row: 1 / span 2; }
+      .prod-title { grid-column: 2; grid-row: 1; min-width: 0; }
+      .prod-body { grid-column: 2; grid-row: 2; min-width: 0; }
+      .prod-name { font-size: 16px; font-weight: 700; margin: 0; }
+      .row-card .prod-name { font-size: 15px; }
       .prod-why { color: #374151; font-size: 14px; line-height: 1.4; margin: 0; display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
       .role-tag { font-size: 11px; color: var(--muted); font-weight: 600; margin-bottom: 2px; }
       .prod-actions { display: flex; gap: 10px; align-items: center; margin-top: 8px; flex-wrap: wrap; }
       .link { color: var(--green); font-weight: 600; font-size: 13px; text-decoration: none; }
       .step-list { display: flex; flex-direction: column; gap: 8px; }
-      .row-card { display: flex; gap: 12px; align-items: flex-start; background: white; border: 1px solid var(--line); border-radius: 12px; padding: 12px; }
-      .step-num { flex: 0 0 24px; height: 24px; border-radius: 999px; background: var(--green); color: white; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
+      .row-card { background: white; border: 1px solid var(--line); border-radius: 12px; padding: 12px; column-gap: 12px; }
+      .row-card.has-step { grid-template-columns: 24px auto minmax(0, 1fr); }
+      .row-card.has-step .step-num { grid-column: 1; grid-row: 1; }
+      .row-card.has-step > img { grid-column: 2; grid-row: 1 / span 2; }
+      .row-card.has-step .prod-title { grid-column: 3; grid-row: 1; }
+      .row-card.has-step .prod-body { grid-column: 3; grid-row: 2; }
+      .champ-card .champ-audience { grid-column: 1 / -1; grid-row: 1; }
+      .champ-card > img { grid-column: 1; grid-row: 2 / span 2; }
+      .champ-card .prod-title { grid-column: 2; grid-row: 2; }
+      .champ-card .prod-body { grid-column: 2; grid-row: 3; }
+      .step-num { width: 24px; height: 24px; border-radius: 999px; background: var(--green); color: white; font-size: 12px; font-weight: 700; display: flex; align-items: center; justify-content: center; margin-top: 2px; }
       .tip { font-size: 13px; color: #374151; background: #f0faf3; border-radius: 10px; padding: 10px 12px; line-height: 1.45; }
       details.more { margin-top: 6px; }
       details.more summary { cursor: pointer; color: var(--muted); font-size: 12px; }
@@ -290,7 +309,19 @@ async def home() -> str:
       .use-dot.hose_on { background: #60b43c; }
       .use-dot.mix_with_iron { background: #e4a818; }
       .pair { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
-      @media (max-width: 640px) { .pair { grid-template-columns: 1fr; } .hero-main { flex-direction: column; } }
+      @media (max-width: 640px) {
+        .pair { grid-template-columns: 1fr; }
+        .prod > img, .row-card > img { grid-row: 1; }
+        .prod-title { grid-row: 1; }
+        .prod-body { grid-column: 1 / -1; grid-row: 2; }
+        .row-card.has-step > img { grid-row: 1; }
+        .row-card.has-step .prod-title { grid-row: 1; }
+        .row-card.has-step .prod-body { grid-column: 1 / -1; grid-row: 2; }
+        .champ-card > img { grid-row: 2; }
+        .champ-card .prod-title { grid-row: 2; }
+        .champ-card .prod-body { grid-column: 1 / -1; grid-row: 3; }
+        .prod-why { -webkit-line-clamp: 4; }
+      }
       .empty { color: var(--muted); font-size: 14px; padding: 16px 0; }
     </style>
   </head>
@@ -688,21 +719,27 @@ async def home() -> str:
         );
         return chips.length ? `<div class="use-row">${chips.join("")}</div>` : "";
       }
+      function prodCopy(p, extras) {
+        return `
+          <div class="prod-body">
+            ${renderUsage(p)}
+            <p class="prod-why">${esc(oneLiner(p) || (extras && extras.why) || "")}</p>
+            <div class="prod-actions">${viewLink(p)}</div>
+            ${(extras && extras.detail) || extraWhy(p)}
+            ${applyTip(p)}
+          </div>`;
+      }
       function heroCard(p, kicker) {
         if (!p) return "";
         return `
           <article class="hero">
             <p class="kicker">${esc(kicker)}</p>
-            <div class="hero-main">
+            <div class="prod">
               ${prodImg(p)}
-              <div>
+              <div class="prod-title">
                 <h4 class="prod-name">${esc(p.name)}</h4>
-                ${renderUsage(p)}
-                <p class="prod-why">${esc(oneLiner(p))}</p>
-                <div class="prod-actions">${viewLink(p)}</div>
-                ${extraWhy(p)}
-                ${applyTip(p)}
               </div>
+              ${prodCopy(p)}
             </div>
           </article>`;
       }
@@ -710,18 +747,14 @@ async def home() -> str:
         if (!p) return "";
         const role = roleHint(p);
         return `
-          <div class="row-card">
+          <div class="row-card has-step">
             <div class="step-num">${n}</div>
             ${prodImg(p)}
-            <div>
+            <div class="prod-title">
               ${role ? `<div class="role-tag">${esc(role)}</div>` : ""}
-              <div class="prod-name" style="font-size:15px;">${esc(p.name)}</div>
-              ${renderUsage(p)}
-              <p class="prod-why">${esc(oneLiner(p))}</p>
-              <div class="prod-actions">${viewLink(p)}</div>
-              ${extraWhy(p)}
-              ${applyTip(p)}
+              <div class="prod-name">${esc(p.name)}</div>
             </div>
+            ${prodCopy(p)}
           </div>`;
       }
       function compactProduct(p, kicker) {
@@ -729,15 +762,11 @@ async def home() -> str:
         return `
           <div class="row-card">
             ${prodImg(p)}
-            <div>
+            <div class="prod-title">
               ${kicker ? `<div class="role-tag">${esc(kicker)}</div>` : ""}
-              <div class="prod-name" style="font-size:15px;">${esc(p.name)}</div>
-              ${renderUsage(p)}
-              <p class="prod-why">${esc(oneLiner(p))}</p>
-              <div class="prod-actions">${viewLink(p)}</div>
-              ${extraWhy(p)}
-              ${applyTip(p)}
+              <div class="prod-name">${esc(p.name)}</div>
             </div>
+            ${prodCopy(p)}
           </div>`;
       }
       function championCol(slot, audience) {
@@ -747,19 +776,13 @@ async def home() -> str:
           ? `<details class="more"><summary>Best for</summary><p>${esc(slot.description)}</p></details>`
           : extraWhy(p);
         return `
-          <div class="row-card" style="flex-direction:column; gap:8px;">
-            <div class="role-tag">${esc(audience)}</div>
-            <div style="display:flex; gap:10px; align-items:flex-start;">
-              ${prodImg(p)}
-              <div>
-                <div class="prod-name" style="font-size:15px;">${esc(p.name)}</div>
-                ${renderUsage(p)}
-                <p class="prod-why">${esc(oneLiner(p) || slot.label || "")}</p>
-                <div class="prod-actions">${viewLink(p)}</div>
-                ${detail}
-                ${applyTip(p)}
-              </div>
+          <div class="row-card champ-card">
+            <div class="role-tag champ-audience">${esc(audience)}</div>
+            ${prodImg(p)}
+            <div class="prod-title">
+              <div class="prod-name">${esc(p.name)}</div>
             </div>
+            ${prodCopy(p, { why: slot.label, detail })}
           </div>`;
       }
       function renderChampionPair(cp) {
