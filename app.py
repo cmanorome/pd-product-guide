@@ -166,29 +166,16 @@ async def home() -> str:
         flex-direction: column;
         gap: 18px;
         padding: 18px 20px 20px;
-        counter-reset: ask;
       }
-      .ask-step {
-        display: grid;
-        grid-template-columns: 28px minmax(0, 1fr);
-        gap: 10px 14px;
-        align-items: start;
-        counter-increment: ask;
-      }
-      .ask-num {
-        width: 28px;
-        height: 28px;
-        border-radius: 99px;
-        background: var(--green-dark);
-        color: #fff;
-        font-size: 13px;
-        font-weight: 700;
+      #ask_panel {
         display: flex;
-        align-items: center;
-        justify-content: center;
-        margin-top: 2px;
+        flex-direction: column;
+        gap: 26px;
       }
-      .ask-num::before { content: counter(ask); }
+      #ask_panel > .ask-step:first-of-type {
+        padding-bottom: 18px;
+      }
+      .ask-step { display: block; }
       .ask-step h3 { margin: 4px 0 8px; }
       .ask-step > div > label { margin-bottom: 8px; }
       .ask-step .muted { margin: 0 0 10px; }
@@ -348,7 +335,6 @@ async def home() -> str:
       </div>
       <div id="ask_panel">
       <section class="ask-step">
-        <span class="ask-num"></span>
         <div>
           <label>I want to</label>
           <div class="mode-row">
@@ -359,7 +345,6 @@ async def home() -> str:
       </section>
 
       <section class="ask-step">
-        <span class="ask-num"></span>
         <div>
           <div class="ask-fields">
             <div id="card_intent">
@@ -409,7 +394,6 @@ async def home() -> str:
       </section>
 
       <section id="section_goals" class="ask-step hidden">
-        <span class="ask-num"></span>
         <div>
           <h3>What do you want?</h3>
           <p class="muted">Tick one or more. These change with where you’re using it.</p>
@@ -439,7 +423,6 @@ async def home() -> str:
       </section>
 
       <section id="section_symptoms" class="ask-step">
-        <span class="ask-num"></span>
         <div>
           <h3>What’s wrong?</h3>
           <div class="check-grid">
@@ -457,7 +440,6 @@ async def home() -> str:
       </section>
 
       <section class="ask-step">
-        <span class="ask-num"></span>
         <div>
           <h3>Soil</h3>
           <div class="check-grid">

@@ -78,10 +78,12 @@ def _load_rate_fallback() -> dict[str, str]:
         return {}
     prefer = (
         "lawn_garden",
+        "lawns",
         "home_garden",
         "general",
         "lawn_drench",
         "home_garden_area",
+        "garden_beds_small_lawns",
         "soil_amendment",
     )
     by_sku: dict[str, list[tuple[str, str]]] = {}
