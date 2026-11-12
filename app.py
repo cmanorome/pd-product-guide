@@ -152,7 +152,19 @@ async def home() -> str:
       .subtitle { margin: 0; color: #dcfce7; max-width: 720px; }
       h3 { font-size: 16px; margin: 22px 0 10px; }
       .grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px; }
-      .card { border: 1px solid var(--line); border-radius: 12px; padding: 12px 14px; background: white; }
+      .card {
+        background: #fff;
+        padding: 20px;
+        border-radius: 14px;
+        border: 1px solid var(--line);
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+        margin-bottom: 18px;
+      }
+      .card > h2 {
+        margin: 0 0 12px;
+        font-size: 20px;
+        color: var(--green-dark);
+      }
       .card h4 { margin: 0 0 8px 0; font-size: 14px; }
       label { display:block; font-size: 12px; color:#374151; margin-bottom: 4px; }
       input, select { width: 100%; padding: 8px; border: 1px solid #d1d5db; border-radius: 8px; }
@@ -161,24 +173,49 @@ async def home() -> str:
       button:disabled { opacity: 0.65; cursor: default; }
       .muted { color: var(--muted); font-size: 13px; line-height: 1.45; }
       .hidden { display: none !important; }
-      .ask.card {
+      .ask-step.card,
+      .ask-toggle-card,
+      .plan-card {
+        border-radius: 14px;
+        padding: 20px;
+        margin-bottom: 18px;
+        box-shadow: 0 8px 22px rgba(15, 23, 42, 0.08);
+      }
+      .ask-step.card > h2,
+      .plan-card > h2 {
+        margin: 0 0 12px;
+        font-size: 20px;
+        color: var(--green-dark);
+      }
+      .ask-toggle-card { display: none; padding: 14px 16px; }
+      .ask.has-plan .ask-toggle-card { display: block; }
+      .ask-toggle-row {
         display: flex;
-        flex-direction: column;
-        gap: 18px;
-        padding: 18px 20px 20px;
+        align-items: flex-start;
+        justify-content: space-between;
+        gap: 12px;
       }
-      #ask_panel {
-        display: flex;
-        flex-direction: column;
-        gap: 26px;
+      button.ask-toggle {
+        display: block;
+        width: auto;
+        text-align: left;
+        background: transparent;
+        color: var(--green-dark);
+        border: 0;
+        padding: 0;
+        font-size: 14px;
+        font-weight: 600;
       }
-      #ask_panel > .ask-step:first-of-type {
-        padding-bottom: 18px;
-      }
+      button.ask-toggle:hover { text-decoration: underline; }
+      #ask_summary_text { margin: 4px 0 0; }
+      #ask_summary_text:empty { display: none; }
+      .ask.has-plan:not(.is-collapsed) #reset_collapsed { display: none; }
+      .ask.is-collapsed #askBody { display: none; }
+      #askBody { display: block; }
       .ask-step { display: block; }
-      .ask-step h3 { margin: 4px 0 8px; }
-      .ask-step > div > label { margin-bottom: 8px; }
+      .ask-step > label { margin: 4px 0 8px; }
       .ask-step .muted { margin: 0 0 10px; }
+      .ask-step > h2 + .muted { margin-top: -4px; }
       .ask-fields {
         display: grid;
         grid-template-columns: repeat(auto-fit, minmax(170px, 1fr));
@@ -208,17 +245,7 @@ async def home() -> str:
       .check-item .title { display: block; font-weight: 600; font-size: 14px; line-height: 1.3; }
       .check-item .desc { display: block; font-size: 12px; color: var(--muted); margin-top: 2px; }
       .ask .fold { margin-top: 10px; }
-      .ask.card.is-collapsed { gap: 0; padding: 14px 16px; }
-      .ask-summary {
-        display: flex;
-        align-items: center;
-        justify-content: space-between;
-        gap: 12px;
-        flex-wrap: wrap;
-      }
-      .ask-summary .kicker { margin: 0 0 2px; }
-      .ask-summary p { margin: 0; font-size: 14px; }
-      .ask-summary-actions { display: flex; gap: 8px; flex-wrap: wrap; }
+      .plan-card { margin-top: 4px; }
       .mode-row { display: flex; flex-wrap: wrap; gap: 10px; }
       .mode-row label {
         display: flex; gap: 8px; align-items: center; cursor: pointer;
@@ -322,30 +349,27 @@ async def home() -> str:
     </header>
     <main class="container">
 
-    <div class="ask card" id="ask_wrap">
-      <div id="ask_summary" class="ask-summary hidden">
-        <div>
-          <p class="kicker">Your answers</p>
-          <p id="ask_summary_text"></p>
-        </div>
-        <div class="ask-summary-actions">
-          <button type="button" id="edit_answers" class="secondary">Change answers</button>
+    <div class="ask" id="ask_wrap">
+      <section class="card ask-toggle-card">
+        <div class="ask-toggle-row">
+          <div>
+            <button type="button" id="askToggle" class="ask-toggle" aria-expanded="true" aria-controls="askBody">Edit questions</button>
+            <p class="muted" id="ask_summary_text"></p>
+          </div>
           <button type="button" id="reset_collapsed" class="secondary">Reset</button>
         </div>
-      </div>
-      <div id="ask_panel">
-      <section class="ask-step">
-        <div>
-          <label>I want to</label>
-          <div class="mode-row">
-            <label><input type="radio" name="rec_mode" value="problems" checked /><span>Fix a problem</span></label>
-            <label><input type="radio" name="rec_mode" value="goals" /><span>Improve results</span></label>
-          </div>
+      </section>
+      <div id="askBody">
+      <section class="card ask-step">
+        <h2>1) I want to</h2>
+        <div class="mode-row">
+          <label><input type="radio" name="rec_mode" value="problems" checked /><span>Fix a problem</span></label>
+          <label><input type="radio" name="rec_mode" value="goals" /><span>Improve results</span></label>
         </div>
       </section>
 
-      <section class="ask-step">
-        <div>
+      <section class="card ask-step">
+        <h2>2) About your space</h2>
           <div class="ask-fields">
             <div id="card_intent">
               <label for="intent">Stage</label>
@@ -390,12 +414,11 @@ async def home() -> str:
               </select>
             </div>
           </div>
-        </div>
       </section>
 
-      <section id="section_goals" class="ask-step hidden">
-        <div>
-          <h3>What do you want?</h3>
+      <section class="card ask-step" id="section_help">
+        <h2 id="help_heading">3) What’s wrong?</h2>
+        <div id="section_goals" class="hidden">
           <p class="muted">Tick one or more. These change with where you’re using it.</p>
           <div id="goals_need_place" class="tip hidden">Choose where you’re using it above, and we’ll show lawn or garden goals.</div>
           <div id="goal_panel_lawn" class="check-grid hidden">
@@ -420,11 +443,7 @@ async def home() -> str:
             <label class="check-item"><input class="goal-cb" type="checkbox" data-goal-key="reduced_input_dependency"/><span><span class="title">Reduced input dependency over time</span></span></label>
           </div>
         </div>
-      </section>
-
-      <section id="section_symptoms" class="ask-step">
-        <div>
-          <h3>What’s wrong?</h3>
+        <div id="section_symptoms">
           <div class="check-grid">
             <label class="check-item"><input id="yellowing" type="checkbox"/><span><span class="title" id="yellowing_title">Yellowing</span><span class="desc" id="yellowing_desc">Pale lawn or yellow leaves on plants.</span></span></label>
             <label class="check-item"><input id="slow_growth" type="checkbox"/><span><span class="title" id="slow_growth_title">Slow growth</span><span class="desc" id="slow_growth_desc">Not filling out — lawn or plants.</span></span></label>
@@ -439,53 +458,53 @@ async def home() -> str:
         </div>
       </section>
 
-      <section class="ask-step">
-        <div>
-          <h3>Soil</h3>
-          <div class="check-grid">
-            <label class="check-item"><input id="sandy" type="checkbox"/><span><span class="title">Sandy</span><span class="desc">Drains fast, nutrients leach.</span></span></label>
-            <label class="check-item"><input id="clay" type="checkbox"/><span><span class="title">Clay</span><span class="desc">Heavy, holds water, compacts easily.</span></span></label>
-            <label class="check-item"><input id="acidic" type="checkbox"/><span><span class="title">Acidic</span><span class="desc">Low pH. Skip if you enter a measured pH.</span></span></label>
-            <label class="check-item"><input id="alkaline" type="checkbox"/><span><span class="title">Alkaline</span><span class="desc">High pH. Skip if you enter a measured pH.</span></span></label>
-            <label class="check-item"><input id="low_organic_matter" type="checkbox"/><span><span class="title">Low organic matter</span><span class="desc">Poor soil life and nutrient buffering.</span></span></label>
-            <label class="check-item"><input id="hydrophobic" type="checkbox"/><span><span class="title">Hydrophobic (water repellent)</span><span class="desc">Water beads/runs off, dry patch.</span></span></label>
-          </div>
-          <details class="fold" id="section_soil_test">
-            <summary>I have a soil test (optional)</summary>
-            <p class="muted">pH is the most useful number. Home kits are usually water pH; Australian labs are often CaCl₂.</p>
-            <div class="ask-fields">
-              <div>
-                <label for="soil_ph">Soil pH</label>
-                <input id="soil_ph" type="number" min="3.5" max="10.5" step="0.1" placeholder="e.g. 6.2" />
-                <div class="muted" style="margin-top:6px;" id="soil_ph_hint">Leave blank if you haven’t tested.</div>
-              </div>
-              <div>
-                <label for="soil_ph_method">Measured in</label>
-                <select id="soil_ph_method">
-                  <option value="water" selected>Water (home kit)</option>
-                  <option value="cacl2">CaCl₂ (lab report)</option>
-                </select>
-              </div>
-              <div>
-                <label for="organic_matter_pct">Organic matter %</label>
-                <input id="organic_matter_pct" type="number" min="0" max="20" step="0.1" placeholder="e.g. 1.8" />
-              </div>
-            </div>
-          </details>
+      <section class="card ask-step" id="section_soil">
+        <h2>4) Soil</h2>
+        <div class="check-grid">
+          <label class="check-item"><input id="sandy" type="checkbox"/><span><span class="title">Sandy</span><span class="desc">Drains fast, nutrients leach.</span></span></label>
+          <label class="check-item"><input id="clay" type="checkbox"/><span><span class="title">Clay</span><span class="desc">Heavy, holds water, compacts easily.</span></span></label>
+          <label class="check-item"><input id="acidic" type="checkbox"/><span><span class="title">Acidic</span><span class="desc">Low pH. Skip if you enter a measured pH.</span></span></label>
+          <label class="check-item"><input id="alkaline" type="checkbox"/><span><span class="title">Alkaline</span><span class="desc">High pH. Skip if you enter a measured pH.</span></span></label>
+          <label class="check-item"><input id="low_organic_matter" type="checkbox"/><span><span class="title">Low organic matter</span><span class="desc">Poor soil life and nutrient buffering.</span></span></label>
+          <label class="check-item"><input id="hydrophobic" type="checkbox"/><span><span class="title">Hydrophobic (water repellent)</span><span class="desc">Water beads/runs off, dry patch.</span></span></label>
         </div>
+        <details class="fold" id="section_soil_test">
+          <summary>I have a soil test (optional)</summary>
+          <p class="muted">pH is the most useful number. Home kits are usually water pH; Australian labs are often CaCl₂.</p>
+          <div class="ask-fields">
+            <div>
+              <label for="soil_ph">Soil pH</label>
+              <input id="soil_ph" type="number" min="3.5" max="10.5" step="0.1" placeholder="e.g. 6.2" />
+              <div class="muted" style="margin-top:6px;" id="soil_ph_hint">Leave blank if you haven’t tested.</div>
+            </div>
+            <div>
+              <label for="soil_ph_method">Measured in</label>
+              <select id="soil_ph_method">
+                <option value="water" selected>Water (home kit)</option>
+                <option value="cacl2">CaCl₂ (lab report)</option>
+              </select>
+            </div>
+            <div>
+              <label for="organic_matter_pct">Organic matter %</label>
+              <input id="organic_matter_pct" type="number" min="0" max="20" step="0.1" placeholder="e.g. 1.8" />
+            </div>
+          </div>
+        </details>
       </section>
+
+      <div class="actions" id="actions">
+        <button id="run" type="button">Get recommendation</button>
+        <button id="reset" class="secondary" type="button">Reset</button>
+      </div>
       </div>
     </div>
 
-    <div class="actions" id="actions">
-      <button id="run">Get recommendation</button>
-      <button id="reset" class="secondary" type="button">Reset</button>
-    </div>
-
-    <h3 id="results_heading">Your plan</h3>
-    <div id="friendly" class="results">
-      <div class="empty">Fill in the form and tap Get recommendation.</div>
-    </div>
+    <section class="card plan-card">
+      <h2 id="results_heading">Your plan</h2>
+      <div id="friendly" class="results">
+        <div class="empty">Fill in the form and tap Get recommendation.</div>
+      </div>
+    </section>
 
     <script>
       const ids = [
@@ -513,6 +532,8 @@ async def home() -> str:
 
         document.getElementById("section_symptoms").classList.toggle("hidden", mode === "goals");
         document.getElementById("section_goals").classList.toggle("hidden", mode === "problems");
+        const help = document.getElementById("help_heading");
+        if (help) help.textContent = mode === "goals" ? "3) What do you want?" : "3) What’s wrong?";
         const gvCard = document.getElementById("card_goal_vertical");
         if (gvCard) gvCard.classList.add("hidden");
         const cardIntent = document.getElementById("card_intent");
@@ -881,22 +902,34 @@ async def home() -> str:
         return parts.join(" · ");
       }
       function collapseQuestions() {
-        document.getElementById("ask_wrap").classList.add("is-collapsed");
-        document.getElementById("ask_panel").classList.add("hidden");
-        document.getElementById("ask_summary").classList.remove("hidden");
+        const wrap = document.getElementById("ask_wrap");
+        const toggle = document.getElementById("askToggle");
+        wrap.classList.add("is-collapsed", "has-plan");
+        toggle.setAttribute("aria-expanded", "false");
+        toggle.textContent = "Edit questions";
         document.getElementById("ask_summary_text").textContent = summarizeAnswers();
-        document.getElementById("actions").classList.add("hidden");
       }
-      function expandQuestions() {
-        document.getElementById("ask_wrap").classList.remove("is-collapsed");
-        document.getElementById("ask_panel").classList.remove("hidden");
-        document.getElementById("ask_summary").classList.add("hidden");
+      function expandQuestions(reset) {
+        const wrap = document.getElementById("ask_wrap");
+        const toggle = document.getElementById("askToggle");
+        wrap.classList.remove("is-collapsed");
         document.getElementById("ask_summary_text").textContent = "";
-        document.getElementById("actions").classList.remove("hidden");
+        if (reset) {
+          wrap.classList.remove("has-plan");
+          toggle.setAttribute("aria-expanded", "true");
+          return;
+        }
+        toggle.setAttribute("aria-expanded", "true");
+        toggle.textContent = "Hide questions";
       }
-      document.getElementById("edit_answers").addEventListener("click", () => {
-        expandQuestions();
-        document.getElementById("ask_wrap").scrollIntoView({ behavior: "smooth", block: "start" });
+      document.getElementById("askToggle").addEventListener("click", () => {
+        const wrap = document.getElementById("ask_wrap");
+        if (wrap.classList.contains("is-collapsed")) {
+          expandQuestions(false);
+          wrap.scrollIntoView({ behavior: "smooth", block: "start" });
+        } else {
+          collapseQuestions();
+        }
       });
 
       document.getElementById("run").addEventListener("click", async () => {
@@ -949,7 +982,7 @@ async def home() -> str:
         syncGoalPanels();
 
         // outputs
-        expandQuestions();
+        expandQuestions(true);
         document.getElementById("friendly").innerHTML = `<div class="empty">Fill in the form and tap Get recommendation.</div>`;
       }
       document.getElementById("reset").addEventListener("click", resetForm);
